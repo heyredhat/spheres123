@@ -1,0 +1,118 @@
+<html>
+	<head>
+		<title>spheres!</title>
+		<script src="https://code.jquery.com/jquery-3.3.1.js"></script>
+		<script src="http://threejs.org/build/three.min.js"></script>
+		<script src="http://threejs.org/examples/js/controls/OrbitControls.js"></script>
+		<style>
+			body { 
+				margin: 0;
+				color: white;
+			}
+
+			canvas { 
+				width: 100%; 
+				height: 100%;
+			}
+
+			#controls {
+				position: absolute;
+				z-index: 100;
+				color: white;
+				background-color: black;
+				opacity: 0.7;
+				border-radius: 5px;
+			}
+		</style>
+	</head>
+	<body>
+<div id="controls"><pre>
+  ------------------------------ 
+ |           a qubit            | 
+  ------------------------------ 
+ |              +Y              | 
+ |               w       -Z     | 
+ |               |     z        | 
+ |               |   /          | 
+ |               | /            | 
+ | -X a  ________*________ d +X | 
+ |             / |              | 
+ |           /   |              | 
+ |         x     |              | 
+ |     +Z        s              | 
+ |              -Y              | 
+  ------------------------------</pre></div>
+	</body>
+	<script>
+			var renderer = new THREE.WebGLRenderer();
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			document.body.appendChild(renderer.domElement);
+
+			var scene = new THREE.Scene();
+			var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+			var camera_controls = new THREE.OrbitControls(camera);
+			camera.position.z = 2;
+			window.addEventListener('resize', function (event) {
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+			});
+
+			var light = new THREE.AmbientLight(0xffffff);
+			scene.add(light);
+
+			var sphere_geometry = new THREE.SphereGeometry(1, 32, 32);
+			var sphere_material = new THREE.MeshPhongMaterial({color: 0x0000ff,  transparent: true});
+			var sphere = new THREE.Mesh(sphere_geometry, sphere_material);
+			sphere_material.opacity = 0.7;
+			scene.add(sphere);
+
+			var star_geometry = new THREE.SphereGeometry(0.1, 32, 32);
+			var star_material = new THREE.MeshPhongMaterial({color: 0xffffff});
+			var star = new THREE.Mesh(star_geometry, star_material);
+			scene.add(star);
+
+			var up = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xffff00, 0.1);
+			scene.add(up); 
+
+			function log(message) {
+				$("body").append(message + "<br/>");
+			}
+
+			document.addEventListener("keypress", function (event) {
+				var keyCode = event.which;
+				$.ajax({
+					url: "/keypress/?keyCode=" + keyCode,
+					dataType: "json",
+					success: function (response) {
+					},
+					error: function (response) {
+						log("error!: " + response.responseText);
+					},
+					always: function (response) {
+						log("haylp!: " + response.responseText);
+					}
+				});
+			});
+
+			function animate () {
+				$.ajax({
+					url: "/animate",
+					dataType: "json",
+					success: function (response) {
+						star.position.set(response["x"], response["y"], response["z"]);
+					},
+					error: function (response) {
+						log("error!: " + response.responseText);
+					},
+					always: function (response) {
+						log("haylp!: " + response.responseText);
+					}
+				});
+				requestAnimationFrame(animate);
+				camera_controls.update();
+				renderer.render(scene, camera);
+			};
+			animate();
+		</script>
+<html>
