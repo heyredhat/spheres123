@@ -2,7 +2,6 @@ import math
 import qutip as qt
 
 from flask import Flask, request, Response, render_template
-from http.server import * 
 import json
 
 def evolve(state, operator, dt=0.01, inverse=False):
@@ -46,6 +45,3 @@ def key_press():
     elif (keyCode == 120):
         state = evolve(state, qt.sigmaz(), dt, False) # x : Z+
     return Response()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0')
