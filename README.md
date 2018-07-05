@@ -3,6 +3,11 @@
 # to push to github
 git push -u origin master
 
+# github commit
+git commit -am "nice"
+
+# pull from github
+git pull origin master
 
 # to config domain name
 heroku domains:add www.xn--sphres-kva.com
