@@ -8,6 +8,8 @@ git push -u origin master
 git pull origin master
 
 # to deploy
+install docker!
+
 heroku login 
 
 heroku plugins:install heroku-container-registry
@@ -26,3 +28,7 @@ heroku container:release web
 heroku domains:add www.xn--sphres-kva.com
 
 heroku domains:add xn--sphres-kva.com
+
+# to test
+
+flask run
