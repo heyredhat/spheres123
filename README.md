@@ -1,20 +1,15 @@
 # spheres123 notes
 
-# to push to github
-git push -u origin master
-
-# github commit
+# github
 git commit -am "nice"
 
-# pull from github
+git push -u origin master
+
 git pull origin master
 
-# to config domain name
-heroku domains:add www.xn--sphres-kva.com
-
-heroku domains:add xn--sphres-kva.com
-
 # to deploy
+heroku login 
+
 heroku plugins:install heroku-container-registry
 
 heroku container:login
@@ -27,3 +22,7 @@ heroku container:push web
 
 heroku container:release web
 
+# to config domain name
+heroku domains:add www.xn--sphres-kva.com
+
+heroku domains:add xn--sphres-kva.com
