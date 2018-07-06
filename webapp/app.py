@@ -1,19 +1,14 @@
-import math
-import qutip as qt
-
 from flask import Flask, request, Response, render_template
+import logging
 import json
 
-def evolve(state, operator, dt=0.01, inverse=False):
-    unitary = (-2*math.pi*1j*operator*dt).expm()
-    if inverse:
-        unitary = unitary.dag()
-    return unitary*state
+from spheres import *
 
-dt = 0.01
-state = qt.rand_ket(2)
-
+sphere = Sphere()
 app = Flask("spheres")
+log = logging.getLogger('werkzeug')
+log.disabled = True
+app.logger.disabled = True
 
 @app.route("/")
 def root():
@@ -21,10 +16,12 @@ def root():
 
 @app.route("/animate/")
 def animate():
-    global state
-    return Response(json.dumps({ "x" : qt.expect(qt.sigmax(), state),\
-                                 "y" : qt.expect(qt.sigmay(), state),\
-                                 "z" : qt.expect(qt.sigmaz(), state)}),\
+    global sphere
+    sphere.update()
+    return Response(json.dumps({"spin_axis" : sphere.spin_axis(),\
+                                "stars" : sphere.stars(),\
+                                "state" : sphere.pretty_state(),\
+                                "dt" : sphere.dt}),\
                     mimetype="application/json")
 
 @app.route("/keypress/")
@@ -33,15 +30,29 @@ def key_press():
     global state
     keyCode = int(request.args.get('keyCode'))
     if (keyCode == 97):
-        state = evolve(state, qt.sigmax(), dt, True)  # a : X-
+        sphere.rotate("x", inverse=True)
     elif (keyCode == 100):
-        state = evolve(state, qt.sigmax(), dt, False) # d : X+
+        sphere.rotate("x", inverse=False)
     elif (keyCode == 115):
-        state = evolve(state, qt.sigmay(), dt, True)  # s : Y-
+        sphere.rotate("y", inverse=True)
     elif (keyCode == 119):
-        state = evolve(state, qt.sigmay(), dt, False) # w : Y+
+        sphere.rotate("y", inverse=False)
     elif (keyCode == 122):
-        state = evolve(state, qt.sigmaz(), dt, True)  # z : Z-
+        sphere.rotate("z", inverse=False)
     elif (keyCode == 120):
-        state = evolve(state, qt.sigmaz(), dt, False) # x : Z+
+        sphere.rotate("z", inverse=False)
+    elif (keyCode == 117):
+        sphere.evolving = False if sphere.evolving else True
+    elif (keyCode == 105):
+        sphere.random_state()
+    elif (keyCode == 111):
+        sphere.random_energy()
+    elif (keyCode == 91):
+        sphere.dt = sphere.dt-0.001
+    elif (keyCode == 93):
+        sphere.dt = sphere.dt+0.001
+    elif (keyCode == 113):
+        sphere.destroy_star()
+    elif (keyCode == 101):
+        sphere.create_star()
     return Response()

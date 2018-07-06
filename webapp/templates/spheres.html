@@ -23,25 +23,57 @@
 				opacity: 0.7;
 				border-radius: 5px;
 			}
+
+			#status {
+				position: fixed;
+				left: 0px;
+				bottom: 0px;
+				color: white;
+				z-index: 100;
+				background-color: black;
+				opacity: 0.7;
+				border-radius: 5px;
+				width: 100%;
+				height: 10%;
+			}
 		</style>
 	</head>
 	<body>
-<div id="controls"><pre>
-  ------------------------------ 
- |           a qubit            | 
-  ------------------------------ 
- |              +Y              | 
- |               w       -Z     | 
- |               |     z        | 
- |               |   /          | 
- |               | /            | 
- | -X a  ________*________ d +X | 
- |             / |              | 
- |           /   |              | 
- |         x     |              | 
- |     +Z        s              | 
- |              -Y              | 
-  ------------------------------</pre></div>
+		<div id="controls"><pre>
+  --------------------------------- 
+ |              help               | 
+  --------------------------------- 
+ |               +Y                |
+ |                                 | 
+ |   keyboard    'w'       -Z      | 
+ |   controls     |    'z'         | 
+ |                |   /            | 
+ |                | /              | 
+ | -X 'a' ________*________ 'd' +X | 
+ |              / |                | 
+ |            /   |                | 
+ |         'x'    |       for      | 
+ |      +Z       's'   rotations   | 
+ |                                 | 
+ |               -Y                | 
+  ---------------------------------
+ | 'u' toggle time evolution       |
+  ---------------------------------
+ | 'i' random state                |
+ | 'o' random energy               |
+  ---------------------------------
+ | '[' decrease dt                 |
+ | ']' increase dt    dt @ <span id="dt"></span>  |
+  ---------------------------------
+ | 'q' destroy star                |
+ | 'e' create star                 |
+  ---------------------------------
+ | '/' toggle help                 |
+ | '`' toggle status               |
+  ---------------------------------</pre></div>
+  		<div id="status"><pre>
+ state: <span id="state"></span></pre>
+		</div>
 	</body>
 	<script>
 			var renderer = new THREE.WebGLRenderer();
@@ -67,13 +99,13 @@
 			sphere_material.opacity = 0.7;
 			scene.add(sphere);
 
-			var star_geometry = new THREE.SphereGeometry(0.1, 32, 32);
-			var star_material = new THREE.MeshPhongMaterial({color: 0xffffff});
-			var star = new THREE.Mesh(star_geometry, star_material);
-			scene.add(star);
+			var spin_axis_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xFF0000, 0.1);
+			scene.add(spin_axis_arrow);
 
-			var up = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xffff00, 0.1);
-			scene.add(up); 
+			var up_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xffff00, 0.1);
+			scene.add(up_arrow); 
+
+			var stars = [];
 
 			function log(message) {
 				$("body").append(message + "<br/>");
@@ -81,18 +113,26 @@
 
 			document.addEventListener("keypress", function (event) {
 				var keyCode = event.which;
-				$.ajax({
-					url: "/keypress/?keyCode=" + keyCode,
-					dataType: "json",
-					success: function (response) {
-					},
-					error: function (response) {
-						log("error!: " + response.responseText);
-					},
-					always: function (response) {
-						log("haylp!: " + response.responseText);
-					}
-				});
+				if (keyCode == 47) {
+					control_pane = document.getElementById("controls");
+			    	control_pane.style.display = control_pane.style.display == "none" ? "block" : "none";
+			    } else if (keyCode == 96) {
+			    	status_pane = document.getElementById("status");
+			    	status_pane.style.display = status_pane.style.display == "none" ? "block" : "none";
+			    } else {
+					$.ajax({
+						url: "/keypress/?keyCode=" + keyCode,
+						dataType: "json",
+						success: function (response) {
+						},
+						error: function (response) {
+							log("error!: " + response.responseText);
+						},
+						always: function (response) {
+							log("haylp!: " + response.responseText);
+						}
+					});
+				}
 			});
 
 			function animate () {
@@ -100,7 +140,43 @@
 					url: "/animate",
 					dataType: "json",
 					success: function (response) {
-						star.position.set(response["x"], response["y"], response["z"]);
+						var new_spin_axis = response["spin_axis"];
+						var new_stars = response["stars"];
+						var new_state = response["state"];
+						var new_dt = response["dt"];
+
+						// Update spin axis marker
+						spin_axis_arrow.setDirection(new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], new_spin_axis[0][2]));
+						spin_axis_arrow.setLength(new_spin_axis[1]);
+
+						// Update stars
+						if (new_stars.length == stars.length) {
+							for(i = 0; i < stars.length; ++i) {
+								stars[i].position.set(new_stars[i][0], new_stars[i][1], new_stars[i][2]);
+							}
+						} else {
+							for(i = 0; i < stars.length; ++i) {
+								scene.remove(stars[i]);
+							}
+							for(i = 0; i < new_stars.length; ++i) {
+								var star_geometry = new THREE.SphereGeometry(0.1, 32, 32);
+								var star_material = new THREE.MeshPhongMaterial({color: 0xffffff});
+								var star = new THREE.Mesh(star_geometry, star_material);
+								star.position.set(new_stars[i][0], new_stars[i][1], new_stars[i][2])
+								stars.push(star)
+								scene.add(star);
+							}
+						}
+
+						// Update status
+						document.getElementById("state").innerHTML = new_state;
+
+						// Update help
+						if (dt < 0) {
+							document.getElementById("dt").innerHTML = new_dt.toFixed(3);
+						} else {
+							document.getElementById("dt").innerHTML = new_dt.toFixed(3) + " ";
+						}
 					},
 					error: function (response) {
 						log("error!: " + response.responseText);
@@ -109,7 +185,12 @@
 						log("haylp!: " + response.responseText);
 					}
 				});
-				requestAnimationFrame(animate);
+				//requestAnimationFrame(animate);
+
+				setTimeout(function() {
+        			requestAnimationFrame(animate);
+   				 }, 40 );
+
 				camera_controls.update();
 				renderer.render(scene, camera);
 			};

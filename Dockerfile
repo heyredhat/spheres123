@@ -11,5 +11,6 @@ ADD ./webapp /opt/webapp/
 WORKDIR /opt/webapp
 
 RUN conda install -c conda-forge qutip 
+RUN conda install sympy
 
 CMD gunicorn --bind 0.0.0.0:$PORT wsgi
