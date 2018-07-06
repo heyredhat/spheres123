@@ -1,4 +1,5 @@
 import math
+import cmath
 import mpmath
 import sympy
 import functools
@@ -12,6 +13,11 @@ def normalize(v):
     if norm == 0: 
        return v
     return v / norm
+
+def sph_xyz(theta, phi):
+    return [math.sin(theta)*math.cos(phi),\
+            math.sin(theta)*math.sin(phi),\
+            math.cos(theta)]
 
 def c_xyz(c):
     if c == float('inf'):
@@ -77,12 +83,16 @@ class Sphere:
     def __init__(self, state=None,\
                        energy=None,\
                        dt=0.01,\
-                       evolving=False):
+                       evolving=False,\
+                       show_phase=True,\
+                       calculate_husimi=False):
         self.state = state if state != None else qt.rand_ket(2)
         self.energy = energy if energy != None else qt.rand_herm(2)
 
         self.dt = dt
         self.evolving = evolving
+        self.show_phase = show_phase
+        self.calculate_husimi = calculate_husimi
 
     def n(self):
         return self.state.shape[0]
@@ -105,6 +115,11 @@ class Sphere:
         direction = normalize(axis).tolist()
         length = np.linalg.norm(axis)
         return [direction, length]
+
+    def phase(self):
+        vec = self.state.full().T[0]
+        p = np.exp(1j*np.angle(np.sum(vec)))
+        return [p.real, p.imag]
 
     def evolve(self, operator, dt=None, inverse=False):
         if dt == None:
@@ -140,4 +155,18 @@ class Sphere:
             self.energy = qt.rand_herm(self.n())
 
     def pretty_state(self):
-        return np.array_str(self.state.full().T[0], precision=2)
+        vec = self.state.full().T[0]
+        s = np.array_str(vec, precision=2, suppress_small=True) + " aka\n"
+        s += "        [" + " ".join(["%.2f^%.2f" % (abs(c), cmath.phase(c)) for c in self.state.full().T[0]]) + "]"
+        return s
+
+    def husimi(self):
+        N = 25
+        theta = np.linspace(0, math.pi, N)
+        phi = np.linspace(0, 2*math.pi, N)
+        Q, THETA, PHI = qt.spin_q_function(self.state, theta, phi)
+        pts = []
+        for i, j, k in zip(Q, THETA, PHI):
+            for q, t, p in zip(i, j, k):
+                pts.append([q, sph_xyz(t, p)])
+        return pts

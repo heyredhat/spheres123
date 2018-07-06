@@ -62,6 +62,9 @@
  | 'i' random state                |
  | 'o' random energy               |
   ---------------------------------
+ | 'p' toggle husimi               |
+ | 'l' toggle phase                |
+  ---------------------------------
  | '[' decrease dt                 |
  | ']' increase dt    dt @ <span id="dt"></span>  |
   ---------------------------------
@@ -102,10 +105,14 @@
 			var spin_axis_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xFF0000, 0.1);
 			scene.add(spin_axis_arrow);
 
+			var phase_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0x008000, 0.5);
+			scene.add(phase_arrow);
+
 			var up_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xffff00, 0.1);
 			scene.add(up_arrow); 
 
 			var stars = [];
+			var husimi_pts = [];
 
 			function log(message) {
 				$("body").append(message + "<br/>");
@@ -144,10 +151,20 @@
 						var new_stars = response["stars"];
 						var new_state = response["state"];
 						var new_dt = response["dt"];
+						var new_phase = response["phase"];
+						var new_husimi = response["husimi"];
 
-						// Update spin axis marker
+						// Update spin axis arrow
 						spin_axis_arrow.setDirection(new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], new_spin_axis[0][2]));
 						spin_axis_arrow.setLength(new_spin_axis[1]);
+
+						// Update phase arrow
+						if (new_phase.length == 0) {
+							phase_arrow.visible = false;
+						} else {
+							phase_arrow.visible = true;
+							phase_arrow.setDirection(new THREE.Vector3(new_phase[0], new_phase[1], 0));
+						}
 
 						// Update stars
 						if (new_stars.length == stars.length) {
@@ -162,9 +179,37 @@
 								var star_geometry = new THREE.SphereGeometry(0.1, 32, 32);
 								var star_material = new THREE.MeshPhongMaterial({color: 0xffffff});
 								var star = new THREE.Mesh(star_geometry, star_material);
-								star.position.set(new_stars[i][0], new_stars[i][1], new_stars[i][2])
-								stars.push(star)
+								star.position.set(new_stars[i][0], new_stars[i][1], new_stars[i][2]);
+								stars.push(star);
 								scene.add(star);
+							}
+						}
+
+						// Update husimi
+						if (new_husimi.length != 0) {
+							if (husimi_pts.length == 0) {
+								for (i = 0; i < new_husimi.length; ++i) {
+									var color = new THREE.Color();
+									color.setHSL(0.6, 0, new_husimi[i][0]);
+									var point_geometry = new THREE.SphereGeometry(0.03, 32, 32);
+									var point_material = new THREE.MeshPhongMaterial({ color: color });
+									var point = new THREE.Mesh(point_geometry, point_material);
+									point.position.set(new_husimi[i][1][0], new_husimi[i][1][1], new_husimi[i][1][2]);
+									husimi_pts.push(point);
+									scene.add(point);
+								}
+							} else {
+								for (i = 0; i < new_husimi.length; ++i) {
+									//husimi_pts[i].position.set(new_husimi[i][1][0], new_husimi[i][1][1], new_husimi[i][1][2]);
+									husimi_pts[i].material.color.setHSL(0.6, 0, new_husimi[i][0]);
+								}
+							}
+						} else {
+							if (husimi_pts.length != 0) {
+								for (i = 0; i < husimi_pts.length; ++i) {
+									scene.remove(husimi_pts[i]);
+								}
+								husimi_pts = [];
 							}
 						}
 
