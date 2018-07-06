@@ -25,11 +25,12 @@ def c_xyz(c):
     x = c.real
     y = c.imag
     return [-1*(2*x)/(1.+(x**2)+(y**2)),\
-            (2*y)/(1.+(x**2)+(y**2)),\
-            (-1.+(x**2)+(y**2))/(1.+(x**2)+(y**2))]
+            -1*(2*y)/(1.+(x**2)+(y**2)),\
+            -1*(-1.+(x**2)+(y**2))/(1.+(x**2)+(y**2))]
 
 def xyz_c(xyz):
-    x, y, z = -1*xyz[0], xyz[1], xyz[2]
+    #x, y, z = -1*xyz[0], xyz[1], xyz[2]
+    x, y, z = -1*xyz[0], -1*xyz[1], -1*xyz[2]
     if z == 1:
         return float('inf') 
     else:
@@ -109,8 +110,8 @@ class Sphere:
     def spin_axis(self):
         mink = np.array([qt.expect(qt.identity(self.n()), self.state),\
                          qt.expect(qt.jmat(self.spin(), "x"), self.state),\
-                         qt.expect(qt.jmat(self.spin(), "y"), self.state),\
-                         qt.expect(qt.jmat(self.spin(), "z"), self.state)])
+                         -1*qt.expect(qt.jmat(self.spin(), "y"), self.state),\
+                         -1*qt.expect(qt.jmat(self.spin(), "z"), self.state)])
         axis = normalize(mink)[1:]
         direction = normalize(axis).tolist()
         length = np.linalg.norm(axis)
@@ -146,12 +147,12 @@ class Sphere:
 
     def create_star(self):
         xyz = q_SurfaceXYZ(qt.rand_ket(2))
-        self.state = SurfaceXYZ_q(self.stars() + xyz)
+        self.state = SurfaceXYZ_q(self.stars() + xyz).unit()
         self.energy = qt.rand_herm(self.n())
 
     def destroy_star(self):
         if self.n() > 2:
-            self.state = SurfaceXYZ_q(self.stars()[1:])
+            self.state = SurfaceXYZ_q(self.stars()[1:]).unit()
             self.energy = qt.rand_herm(self.n())
 
     def pretty_state(self):
