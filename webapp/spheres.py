@@ -1,84 +1,10 @@
 import math
 import cmath
-import mpmath
-import sympy
-import functools
 import qutip as qt
 import numpy as np
+import gellman
 
-##################################################################################################################
-
-def normalize(v):
-    norm = np.linalg.norm(v)
-    if norm == 0: 
-       return v
-    return v / norm
-
-def sph_xyz(theta, phi):
-    return [math.sin(theta)*math.cos(phi),\
-            math.sin(theta)*math.sin(phi),\
-            math.cos(theta)]
-
-def c_xyz(c):
-    if c == float('inf'):
-        return [0,0,1]
-    x = c.real
-    y = c.imag
-    return [-1*(2*x)/(1.+(x**2)+(y**2)),\
-            -1*(2*y)/(1.+(x**2)+(y**2)),\
-            -1*(-1.+(x**2)+(y**2))/(1.+(x**2)+(y**2))]
-
-def xyz_c(xyz):
-    #x, y, z = -1*xyz[0], xyz[1], xyz[2]
-    x, y, z = -1*xyz[0], -1*xyz[1], -1*xyz[2]
-    if z == 1:
-        return float('inf') 
-    else:
-        return complex(x/(1-z), y/(1-z))
-
-def combos(a,b):
-    f = math.factorial
-    return f(a) / f(b) / f(a-b)
-
-def polynomial_v(polynomial):
-    coordinates = [polynomial[i]/(((-1)**i) * math.sqrt(combos(len(polynomial)-1,i))) for i in range(len(polynomial))]
-    return np.array(coordinates)
-
-def v_polynomial(v):
-    polynomial = v.tolist()
-    return [(((-1)**i) * math.sqrt(combos(len(polynomial)-1,i))) * polynomial[i] for i in range(len(polynomial))] 
-
-def C_polynomial(roots):
-    s = sympy.symbols("s")
-    polynomial = sympy.Poly(functools.reduce(lambda a, b: a*b, [s-np.conjugate(root) for root in roots]), domain="CC")
-    return [complex(c) for c in polynomial.coeffs()]
-
-def polynomial_C(polynomial):
-    try:
-        roots = [np.conjugate(complex(root)) for root in mpmath.polyroots(polynomial)]
-    except:
-        return [float('Inf') for i in range(len(polynomial)-1)]
-    return roots
-
-def C_v(roots):
-    return polynomial_v(C_polynomial(roots))
-
-def v_C(v):
-    return polynomial_C(v_polynomial(v))
-
-def v_SurfaceXYZ(v):
-    return [c_xyz(c) for c in v_C(v)]
-
-def SurfaceXYZ_v(XYZ):
-    return C_v([xyz_c(xyz) for xyz in XYZ])
-
-def q_SurfaceXYZ(q):
-    return v_SurfaceXYZ(q.full().T[0])
-
-def SurfaceXYZ_q(XYZ):
-    return qt.Qobj(C_v([xyz_c(xyz) for xyz in XYZ]))
-
-##################################################################################################################
+from magic import *
 
 class Sphere:
     def __init__(self, state=None,\
@@ -86,14 +12,22 @@ class Sphere:
                        dt=0.01,\
                        evolving=False,\
                        show_phase=True,\
+                       show_components=False,\
+                       show_projection=False,\
+                       show_controls=False,\
                        calculate_husimi=False):
         self.state = state if state != None else qt.rand_ket(2)
-        self.energy = energy if energy != None else qt.rand_herm(2)
+        self.energy = energy if energy != None else qt.rand_herm(self.n())
 
         self.dt = dt
         self.evolving = evolving
         self.show_phase = show_phase
+        self.show_components = show_components
+        self.show_projection = show_projection
+        self.show_controls = show_controls
         self.calculate_husimi = calculate_husimi
+
+        self.precalc_bases = None
 
     def n(self):
         return self.state.shape[0]
@@ -145,19 +79,36 @@ class Sphere:
     def stars(self):
         return q_SurfaceXYZ(self.state)
 
+    def plane_stars(self):
+        C = v_C(self.state.full().T[0])
+        return [[c.real, c.imag, 0] for c in C]
+ 
+    def component_stars(self):
+        components = self.state.full().T[0].tolist()
+        return [c_xyz(c) for c in components]
+
+    def plane_component_stars(self):
+        C = self.state.full().T[0].tolist()
+        return [[c.real, c.imag, 0] for c in C]
+
+    def set_stars(self, new_stars):
+        self.state = SurfaceXYZ_q(new_stars)
+
     def create_star(self):
         xyz = q_SurfaceXYZ(qt.rand_ket(2))
         self.state = SurfaceXYZ_q(self.stars() + xyz).unit()
         self.energy = qt.rand_herm(self.n())
+        self.hermitian_bases(reset=True)
 
     def destroy_star(self):
         if self.n() > 2:
             self.state = SurfaceXYZ_q(self.stars()[1:]).unit()
             self.energy = qt.rand_herm(self.n())
+            self.hermitian_bases(reset=True)
 
     def pretty_state(self):
         vec = self.state.full().T[0]
-        s = np.array_str(vec, precision=2, suppress_small=True) + " aka\n"
+        s = np.array_str(vec, max_line_width=100, precision=2, suppress_small=True) + " aka\n"
         s += "        [" + " ".join(["%.2f^%.2f" % (abs(c), cmath.phase(c)) for c in self.state.full().T[0]]) + "]"
         return s
 
@@ -171,3 +122,27 @@ class Sphere:
             for q, t, p in zip(i, j, k):
                 pts.append([q, sph_xyz(t, p)])
         return pts
+
+    def hermitian_bases(self, reset=False):
+        if self.precalc_bases == None or reset == True:
+            self.precalc_bases = [[qt.Qobj(basis), qt.Qobj(basis).eigenstates()] for basis in gellman.get_basis(self.n())]
+        return self.precalc_bases
+
+    def hermitian_basis(self):
+        bases = self.hermitian_bases()
+        vector = [qt.expect(basis[0], self.state) for basis in bases]
+        return vector, bases
+
+    def controls(self, verbose=False):
+        vector, bases = self.hermitian_basis()
+        s = ""
+        for i in range(len(bases)):
+            s += "  %d: %.3f\n" % (i, vector[i])
+            basis = bases[i][0]
+            L, V = bases[i][1]
+            for j in range(len(V)):
+                l = L[j]
+                v = V[j]
+                inner = self.state.overlap(v)
+                s += "\t%.2f : %s | %.2f\n" % (L[j].real,'({0.real:.2f} + {0.imag:.2f}i)'.format(inner), (inner*np.conjugate(inner)).real)
+        return s[:-1]

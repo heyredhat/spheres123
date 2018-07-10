@@ -1,41 +1,68 @@
-from flask import Flask, request, Response, render_template
-import logging
-import json
-
 from spheres import *
 
-sphere = Sphere()
-sphere.state = qt.basis(2,0)
+sphere = Sphere(state=qt.rand_ket(3),\
+                energy=qt.rand_herm(3),\
+                dt=0.01,\
+                evolving=True,\
+                show_phase=True,\
+                show_components=False,\
+                show_projection=False,\
+                show_controls=False,\
+                calculate_husimi=False)
 
+##################################################################################################################
+
+import os
+import json
+import time
+import gevent
+import logging
+from flask import Flask, request, Response, render_template
+import socketio
+
+sio = socketio.Server()
 app = Flask("spheres")
+app.wsgi_app = socketio.Middleware(sio, app.wsgi_app)
+thread = None
+#import logging
 #log = logging.getLogger('werkzeug')
 #log.disabled = True
 #app.logger.disabled = True
 
 @app.route("/")
 def root():
+    global thread
+    if thread is None:
+        thread = sio.start_background_task(animate)
     return render_template("spheres.html")
 
-@app.route("/animate/")
 def animate():
     global sphere
-    sphere.update()
-    husimi = sphere.husimi() if sphere.calculate_husimi else []
-    phase = sphere.phase() if sphere.show_phase else []
-    return Response(json.dumps({"spin_axis" : sphere.spin_axis(),\
-                                "stars" : sphere.stars(),\
-                                "state" : sphere.pretty_state(),\
-                                "dt" : sphere.dt,\
-                                "phase" : phase,\
-                                "husimi" : husimi}),\
-                    mimetype="application/json")
+    while True:
+        sphere.update()
+        husimi = sphere.husimi() if sphere.calculate_husimi else []
+        phase = sphere.phase() if sphere.show_phase else []
+        component_stars = sphere.component_stars() if sphere.show_components else []
+        plane_stars = sphere.plane_stars() if sphere.show_projection else []
+        plane_component_stars = sphere.plane_component_stars() if sphere.show_projection and sphere.show_components else []
+        controls = sphere.controls() if sphere.show_controls else []
+        sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
+                            "stars" : sphere.stars(),\
+                            "state" : sphere.pretty_state(),\
+                            "dt" : sphere.dt,\
+                            "phase" : phase,\
+                            "component_stars" : component_stars,\
+                            "plane_stars" : plane_stars,\
+                            "plane_component_stars" : plane_component_stars,\
+                            "husimi" : husimi,\
+                            "controls" : controls})
+        sio.emit("animate", sioEmitData)
+        sio.sleep(0)
 
 @app.route("/keypress/")
 def key_press():
-    global dt
-    global state
+    global sphere
     keyCode = int(request.args.get('keyCode'))
-    print(keyCode)
     if (keyCode == 97):
         sphere.rotate("x", inverse=True)
     elif (keyCode == 100):
@@ -56,6 +83,10 @@ def key_press():
         sphere.random_energy()
     elif (keyCode == 112) :
         sphere.calculate_husimi = False if sphere.calculate_husimi else True
+    elif (keyCode == 106):
+        sphere.show_projection = False if sphere.show_projection else True
+    elif (keyCode == 107):
+        sphere.show_components = False if sphere.show_components else True
     elif (keyCode == 108):
         sphere.show_phase = False if sphere.show_phase else True
     elif (keyCode == 91):
@@ -66,4 +97,15 @@ def key_press():
         sphere.destroy_star()
     elif (keyCode == 101):
         sphere.create_star()
+    elif (keyCode == 46):
+        sphere.show_controls = False if sphere.show_controls else True
     return Response()
+
+##################################################################################################################
+if __name__ == '__main__':
+    import sys
+    import eventlet
+    import eventlet.wsgi
+    app = socketio.Middleware(sio, app)
+    port = int(sys.argv[1])
+    eventlet.wsgi.server(eventlet.listen(('', port)), app) 

@@ -10,7 +10,8 @@ RUN pip install -qr /tmp/requirements.txt
 ADD ./webapp /opt/webapp/
 WORKDIR /opt/webapp
 
-RUN conda install -c conda-forge qutip 
 RUN conda install sympy
+RUN conda install gevent
+RUN conda install -c conda-forge qutip 
 
 CMD gunicorn --bind 0.0.0.0:$PORT wsgi
