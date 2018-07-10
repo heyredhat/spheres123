@@ -48,8 +48,8 @@ var husimi_pts = [];
 
 /************************************************************************************************************/
 
-raycaster = new THREE.Raycaster();
-mouse = new THREE.Vector2();
+var raycaster = new THREE.Raycaster();
+var mouse = new THREE.Vector2();
 
 document.addEventListener( 'mousedown', 
 	function ( event ) {
@@ -66,10 +66,6 @@ document.addEventListener( 'mousedown',
 
 /************************************************************************************************************/
 
-function log(message) {
-	$("body").append(message + "<br/>");
-}
-
 document.addEventListener("keypress", function (event) {
 	var keyCode = event.which;
 	if (keyCode == 47) {
@@ -80,26 +76,21 @@ document.addEventListener("keypress", function (event) {
     	status_pane.style.display = status_pane.style.display == "none" ? "block" : "none";
     } 
     else {
-    	if (keyCode == 46) {
-			control_pane = document.getElementById("controls");
-    		control_pane.style.display = control_pane.style.display == "none" ? "block" : "none";
-
-		}
 		$.ajax({
 			url: "/keypress/?keyCode=" + keyCode,
 			dataType: "json",
-			success: function (response) {
-				queue = [];
-			},
+			success: function (response) { },
 			error: function (response) {
-				log("error!: " + response.responseText);
+				console.log("error!: " + response.responseText);
 			},
 			always: function (response) {
-				log("haylp!: " + response.responseText);
+				console.log("haylp!: " + response.responseText);
 			}
 		});
 	}
 });
+
+/************************************************************************************************************/
 
 function render (response) {
 	var new_spin_axis = response["spin_axis"];
@@ -305,40 +296,23 @@ function render (response) {
 	}
 
 	// Update controls
-	document.getElementById("ctrls").innerHTML = new_controls;
+	if (new_controls == "") {
+		control_pane = document.getElementById("controls");
+    	control_pane.style.display = control_pane.style.display == "none";
+	} else {
+		control_pane = document.getElementById("controls");
+    	control_pane.style.display = control_pane.style.display == "block";
+    	document.getElementById("ctrls").innerHTML = new_controls;
+	}
 }
-
 
 var spheresSocket = io.connect(null, {port: location.port, rememberTransport: false});
 spheresSocket.on("animate", function(socketData) {
-	/*
-	data = {"spin_axis": [[0.915355152366721, 0.0710721185310207, -0.39632524396410757], 0.4472135954999579], "stars": [[-0.9153551523667212, -0.07107211853102072, 0.3963252439641076]], "state": "[-0.21+0.81j -0.10+0.54j] aka\n        [0.84^1.82 0.55^1.75]", "dt": 0.01, "phase": [-0.21923700103719632, 0.9756716339917936], "component_stars": [], "plane_stars": [], "plane_component_stars": [], "husimi": [], "controls": []}
-	*/
-	var parsedSocketData = JSON.parse(socketData);
-	console.log("data = " + socketData + "\nvs socketdata = " + parsedSocketData);
-	render(parsedSocketData);
+	render(JSON.parse(socketData));
 });
 
-
 function animate () {
-	/*$.ajax({
-		url: "/animate",
-		dataType: "json",
-		success: render,
-		error: function (response) {
-			log("error!: " + response.responseText);
-		},
-		always: function (response) {
-			log("haylp!: " + response.responseText);
-		}
-	});*/
-
 	requestAnimationFrame(animate);
-
-	/*setTimeout(function() {
-		requestAnimationFrame(animate);
-		 }, 40 );*/
-
 	camera_controls.update();
 	renderer.render(scene, camera);
 };

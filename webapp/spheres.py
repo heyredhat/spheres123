@@ -1,9 +1,8 @@
 import math
 import cmath
+import gellman
 import qutip as qt
 import numpy as np
-import gellman
-
 from magic import *
 
 class Sphere:

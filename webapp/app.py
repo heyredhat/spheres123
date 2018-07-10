@@ -24,6 +24,7 @@ sio = socketio.Server()
 app = Flask("spheres")
 app.wsgi_app = socketio.Middleware(sio, app.wsgi_app)
 thread = None
+
 #import logging
 #log = logging.getLogger('werkzeug')
 #log.disabled = True
@@ -45,7 +46,7 @@ def animate():
         component_stars = sphere.component_stars() if sphere.show_components else []
         plane_stars = sphere.plane_stars() if sphere.show_projection else []
         plane_component_stars = sphere.plane_component_stars() if sphere.show_projection and sphere.show_components else []
-        controls = sphere.controls() if sphere.show_controls else []
+        controls = sphere.controls() if sphere.show_controls else ""
         sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
                             "stars" : sphere.stars(),\
                             "state" : sphere.pretty_state(),\
@@ -102,6 +103,7 @@ def key_press():
     return Response()
 
 ##################################################################################################################
+
 if __name__ == '__main__':
     import sys
     import eventlet
