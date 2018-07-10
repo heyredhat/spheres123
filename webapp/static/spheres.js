@@ -46,6 +46,8 @@ var component_plane_stars = [];
 var component_plane_arrows = [];
 var husimi_pts = [];
 
+var show_controls = false;
+
 /************************************************************************************************************/
 
 var raycaster = new THREE.Raycaster();
@@ -74,8 +76,17 @@ document.addEventListener("keypress", function (event) {
     } else if (keyCode == 96) {
     	status_pane = document.getElementById("status");
     	status_pane.style.display = status_pane.style.display == "none" ? "block" : "none";
-    } 
-    else {
+    } else if (keyCode == 46) {
+    	if (show_controls == false) {
+    		show_controls = true;
+    		control_pane = document.getElementById("controls");
+	    	control_pane.style.display = "block";
+    	} else {
+    		show_controls = false;
+    		control_pane = document.getElementById("controls");
+	    	control_pane.style.display = "none";
+    	}
+	} else {
 		$.ajax({
 			url: "/keypress/?keyCode=" + keyCode,
 			dataType: "json",
@@ -102,7 +113,6 @@ function render (response) {
 	var new_plane_stars = response["plane_stars"];
 	var new_component_plane_stars = response["plane_component_stars"];
 	var new_husimi = response["husimi"];
-	var new_controls = response["controls"];
 
 	// Update spin axis arrow
 	spin_axis_arrow.setDirection(new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], new_spin_axis[0][2]));
@@ -293,17 +303,7 @@ function render (response) {
 		document.getElementById("dt").innerHTML = new_dt.toFixed(3);
 	} else {
 		document.getElementById("dt").innerHTML = new_dt.toFixed(3) + " ";
-	}
-
-	// Update controls
-	if (new_controls == "") {
-		control_pane = document.getElementById("controls");
-    	control_pane.style.display = control_pane.style.display == "none";
-	} else {
-		control_pane = document.getElementById("controls");
-    	control_pane.style.display = control_pane.style.display == "block";
-    	document.getElementById("ctrls").innerHTML = new_controls;
-	}
+	}	
 }
 
 var spheresSocket = io.connect(null, {port: location.port, rememberTransport: false});
@@ -312,6 +312,21 @@ spheresSocket.on("animate", function(socketData) {
 });
 
 function animate () {
+	if (show_controls == true) {
+		$.ajax({
+			url: "/controls/",
+			dataType: "json",
+			success: function (response) { 
+				document.getElementById("ctrls").innerHTML = response["controls"];
+			},
+			error: function (response) {
+				console.log("error!: " + response.responseText);
+			},
+			always: function (response) {
+				console.log("haylp!: " + response.responseText);
+			}
+		});
+	}
 	requestAnimationFrame(animate);
 	camera_controls.update();
 	renderer.render(scene, camera);

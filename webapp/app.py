@@ -7,7 +7,6 @@ sphere = Sphere(state=qt.rand_ket(3),\
                 show_phase=True,\
                 show_components=False,\
                 show_projection=False,\
-                show_controls=False,\
                 calculate_husimi=False)
 
 ##################################################################################################################
@@ -46,7 +45,6 @@ def animate():
         component_stars = sphere.component_stars() if sphere.show_components else []
         plane_stars = sphere.plane_stars() if sphere.show_projection else []
         plane_component_stars = sphere.plane_component_stars() if sphere.show_projection and sphere.show_components else []
-        controls = sphere.controls() if sphere.show_controls else ""
         sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
                             "stars" : sphere.stars(),\
                             "state" : sphere.pretty_state(),\
@@ -55,10 +53,15 @@ def animate():
                             "component_stars" : component_stars,\
                             "plane_stars" : plane_stars,\
                             "plane_component_stars" : plane_component_stars,\
-                            "husimi" : husimi,\
-                            "controls" : controls})
+                            "husimi" : husimi})
         sio.emit("animate", sioEmitData)
         sio.sleep(0)
+
+@app.route("/controls/")
+def controls():
+    global sphere
+    return Response(json.dumps({"controls" : sphere.controls()}),\
+                            mimetype="application/json")
 
 @app.route("/keypress/")
 def key_press():
@@ -98,8 +101,6 @@ def key_press():
         sphere.destroy_star()
     elif (keyCode == 101):
         sphere.create_star()
-    elif (keyCode == 46):
-        sphere.show_controls = False if sphere.show_controls else True
     return Response()
 
 ##################################################################################################################

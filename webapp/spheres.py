@@ -13,7 +13,6 @@ class Sphere:
                        show_phase=True,\
                        show_components=False,\
                        show_projection=False,\
-                       show_controls=False,\
                        calculate_husimi=False):
         self.state = state if state != None else qt.rand_ket(2)
         self.energy = energy if energy != None else qt.rand_herm(self.n())
@@ -23,7 +22,6 @@ class Sphere:
         self.show_phase = show_phase
         self.show_components = show_components
         self.show_projection = show_projection
-        self.show_controls = show_controls
         self.calculate_husimi = calculate_husimi
 
         self.precalc_bases = None
