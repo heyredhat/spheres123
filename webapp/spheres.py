@@ -96,12 +96,18 @@ class Sphere:
         return [[c.real, c.imag, 0] for c in C]
  
     def component_stars(self):
-        components = self.state.full().T[0].tolist()
-        return [c_xyz(c) for c in components]
+        #components = self.state.full().T[0].tolist()
+        #return [c_xyz(c) for c in components]
+        return [c_xyz(c) for c in v_polynomial(self.state.full().T[0])]
 
     def plane_component_stars(self):
-        C = self.state.full().T[0].tolist()
-        return [[c.real, c.imag, 0] for c in C]
+       #C = self.state.full().T[0].tolist()
+       #return [[c.real, c.imag, 0] for c in C]
+       C = v_polynomial(self.state.full().T[0])
+       return [[c.real, c.imag, 0] for c in C] 
+
+    def allstars(self):
+        pass
 
     def set_stars(self, new_stars):
         self.state = SurfaceXYZ_q(new_stars)
