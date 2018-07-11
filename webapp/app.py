@@ -24,10 +24,9 @@ app = Flask("spheres")
 app.wsgi_app = socketio.Middleware(sio, app.wsgi_app)
 thread = None
 
-#import logging
-#log = logging.getLogger('werkzeug')
-#log.disabled = True
-#app.logger.disabled = True
+log = logging.getLogger('werkzeug')
+log.disabled = True
+app.logger.disabled = True
 
 def animate():
     global sphere
