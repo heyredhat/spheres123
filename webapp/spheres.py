@@ -28,6 +28,7 @@ class Sphere:
 
         self.precalc_bases = None
         self.precalc_paulis = None
+        self.precalc_energy_eigs = None
 
     def n(self):
         return self.state.shape[0]
@@ -37,6 +38,7 @@ class Sphere:
 
     def random_energy(self):
         self.energy = qt.rand_herm(self.n())
+        self.eigenenergies(reset=True)
 
     def spin(self):
         return (self.n()-1.)/2.
@@ -110,6 +112,7 @@ class Sphere:
         self.energy = qt.rand_herm(self.n())
         self.hermitian_bases(reset=True)
         self.paulis(reset=True)
+        self.eigenenergies(reset=True)
 
     def destroy_star(self):
         if self.n() > 2:
@@ -117,6 +120,7 @@ class Sphere:
             self.energy = qt.rand_herm(self.n())
             self.hermitian_bases(reset=True)
             self.paulis(reset=True)
+            self.eigenenergies(reset=True)
 
     def pretty_state(self):
         vec = self.state.full().T[0]
@@ -152,6 +156,11 @@ class Sphere:
             self.precalc_paulis = [ops, eigs]
         return self.precalc_paulis
 
+    def eigenenergies(self, reset=False):
+        if self.precalc_energy_eigs == None and self.energy != None or reset == True:
+            self.precalc_energy_eigs = self.energy.eigenstates()
+        return self.precalc_energy_eigs
+
     def controls(self):
         s = ""
         ops, eigs = self.paulis()
@@ -164,8 +173,13 @@ class Sphere:
                 amplitude = self.state.overlap(V[j])
                 probability = (amplitude*np.conjugate(amplitude)).real
                 s += "\t%.2f\t%.2f%%\n" % (L[j], probability*100)
+        s += "     H '4': %.2f (energy)\n" % (qt.expect(self.energy, self.state))
+        L, V = self.eigenenergies()
+        for j in range(len(V)):
+            amplitude = self.state.overlap(V[j])
+            probability = (amplitude*np.conjugate(amplitude)).real
+            s += "\t%.2f\t%.2f%%\n" % (L[j], probability*100)
         return s[:-1]
-
 
     def pretty_hermitian_basis(self):
         vector, bases = self.hermitian_basis()
