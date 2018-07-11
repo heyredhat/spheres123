@@ -2,28 +2,6 @@
 	<head>
 		<title>spheres!</title>
 		<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='spheres.css') }}">
-    <script>
-
-function collapseXYZ(direction) {
-  console.log("hello!");
-$.ajax({
-    url: "/collapseXYZ/?direction=" + direction.toString(),
-    dataType: "json",
-    success: function (response) { 
-      pick = response["pick"];
-      L = response["L"];
-      V = response["V"];
-      alert(pick.toString() + "\n" + L.toString() + "\n" + V.tostring());
-    },
-    error: function (response) {
-      console.log("error!: " + response.responseText);
-    },
-    always: function (response) {
-      console.log("haylp!: " + response.responseText);
-    }
-  });
-}
-</script>
 	</head>
 	<body>
 		<div id="help"><pre>

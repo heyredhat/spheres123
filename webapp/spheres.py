@@ -80,7 +80,7 @@ class Sphere:
         pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
         projector = V[pick].ptrace(0)
         self.state = (projector*self.state).unit()
-        return pick, L, V
+        return pick, L, probabilities
 
     def update(self):
         if self.evolving and self.energy != None:

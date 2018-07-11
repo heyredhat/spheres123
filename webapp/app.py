@@ -29,13 +29,6 @@ thread = None
 #log.disabled = True
 #app.logger.disabled = True
 
-@app.route("/")
-def root():
-    global thread
-    if thread is None:
-        thread = sio.start_background_task(animate)
-    return render_template("spheres.html")
-
 def animate():
     global sphere
     while True:
@@ -58,6 +51,13 @@ def animate():
                             "controls" : controls});
         sio.emit("animate", sioEmitData)
         sio.sleep(0)
+
+@app.route("/")
+def root():
+    global thread
+    if thread is None:
+        thread = sio.start_background_task(animate)
+    return render_template("spheres.html")
 
 @app.route("/keypress/")
 def key_press():
@@ -101,29 +101,29 @@ def key_press():
     elif (keyCode == 46):
         sphere.show_controls = False if sphere.show_controls else True
     elif (keyCode == 49):
-        pick, L, V = sphere.collapse(sphere.paulis()[0][0])
-        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
+        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     elif (keyCode == 50):
-        pick, L, V = sphere.collapse(sphere.paulis()[0][1])
-        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
+        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     elif (keyCode == 51):
-        pick, L, V = sphere.collapse(sphere.paulis()[0][2])
-        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
+        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     elif (keyCode == 52):
         if sphere.energy != None:
-            pick, L, V = sphere.collapse(sphere.energy)
-            message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+            pick, L, probabilities = sphere.collapse(sphere.energy)
+            message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             stuff["pick"] = message
             stuff["collapsed"] = True
     elif (keyCode == 53):
-        pick, L, V = sphere.collapse(qt.rand_herm(sphere.n()))
-        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
+        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     return json.dumps(stuff), 200, {'ContentType':'application/json'} 
