@@ -13,7 +13,8 @@ class Sphere:
                        show_phase=True,\
                        show_components=False,\
                        show_husimi=False,\
-                       show_projection=False):
+                       show_projection=False,\
+                       show_controls=False):
         self.state = state if state != None else qt.rand_ket(2)
         self.energy = energy if energy != None else qt.rand_herm(self.n())
 
@@ -23,8 +24,10 @@ class Sphere:
         self.show_components = show_components
         self.show_projection = show_projection
         self.show_husimi = show_husimi
+        self.show_controls = show_controls
 
         self.precalc_bases = None
+        self.precalc_paulis = None
 
     def n(self):
         return self.state.shape[0]
@@ -69,6 +72,16 @@ class Sphere:
         elif pole == "z":
             self.evolve(qt.jmat(self.spin(), "z"), inverse=inverse)
 
+    def collapse(self, operator):
+        L, V = operator.eigenstates()
+        amplitudes = [self.state.overlap(v) for v in V]
+        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
+        probabilities = probabilities/probabilities.sum()
+        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
+        projector = V[pick].ptrace(0)
+        self.state = (projector*self.state).unit()
+        return pick, L, V
+
     def update(self):
         if self.evolving and self.energy != None:
           self.evolve(self.energy)
@@ -96,12 +109,14 @@ class Sphere:
         self.state = SurfaceXYZ_q(self.stars() + xyz).unit()
         self.energy = qt.rand_herm(self.n())
         self.hermitian_bases(reset=True)
+        self.paulis(reset=True)
 
     def destroy_star(self):
         if self.n() > 2:
             self.state = SurfaceXYZ_q(self.stars()[1:]).unit()
             self.energy = qt.rand_herm(self.n())
             self.hermitian_bases(reset=True)
+            self.paulis(reset=True)
 
     def pretty_state(self):
         vec = self.state.full().T[0]
@@ -130,7 +145,29 @@ class Sphere:
         vector = [qt.expect(basis[0], self.state) for basis in bases]
         return vector, bases
 
-    def controls(self, verbose=False):
+    def paulis(self, reset=False):
+        if self.precalc_paulis == None or reset == True:
+            ops = qt.jmat(self.spin())
+            eigs = [op.eigenstates() for op in ops]
+            self.precalc_paulis = [ops, eigs]
+        return self.precalc_paulis
+
+    def controls(self):
+        s = ""
+        ops, eigs = self.paulis()
+        signs = ["X", "Y", "Z"]
+        for i in range(len(ops)):
+            op = ops[i]
+            L, V = eigs[i]
+            s += "     %s '%d': %.2f\n" % (signs[i], i+1, qt.expect(op, self.state))
+            for j in range(len(V)):
+                amplitude = self.state.overlap(V[j])
+                probability = (amplitude*np.conjugate(amplitude)).real
+                s += "\t%.2f\t%.2f%%\n" % (L[j], probability*100)
+        return s[:-1]
+
+
+    def pretty_hermitian_basis(self):
         vector, bases = self.hermitian_basis()
         s = ""
         for i in range(len(bases)):

@@ -1,7 +1,7 @@
 from spheres import *
 
-sphere = Sphere(state=qt.rand_ket(3),\
-                energy=qt.rand_herm(3),\
+sphere = Sphere(state=qt.rand_ket(2),\
+                energy=qt.rand_herm(2),\
                 dt=0.01,\
                 evolving=True,\
                 show_phase=True,\
@@ -45,6 +45,7 @@ def animate():
         plane_stars = sphere.plane_stars() if sphere.show_projection else []
         plane_component_stars = sphere.plane_component_stars() if sphere.show_projection and sphere.show_components else []
         husimi = sphere.husimi() if sphere.show_husimi else []
+        controls = sphere.controls() if sphere.show_controls else ""
         sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
                             "stars" : sphere.stars(),\
                             "state" : sphere.pretty_state(),\
@@ -53,20 +54,16 @@ def animate():
                             "component_stars" : component_stars,\
                             "plane_stars" : plane_stars,\
                             "plane_component_stars" : plane_component_stars,\
-                            "husimi" : husimi});
+                            "husimi" : husimi,\
+                            "controls" : controls});
         sio.emit("animate", sioEmitData)
         sio.sleep(0)
-
-@app.route("/controls/")
-def controls():
-    global sphere
-    return Response(json.dumps({"controls" : sphere.controls()}),\
-                            mimetype="application/json")
 
 @app.route("/keypress/")
 def key_press():
     global sphere
     keyCode = int(request.args.get('keyCode'))
+    stuff = {'success':True, 'collapsed':False}
     if (keyCode == 97):
         sphere.rotate("x", inverse=True)
     elif (keyCode == 100):
@@ -101,8 +98,36 @@ def key_press():
         sphere.destroy_star()
     elif (keyCode == 101):
         sphere.create_star()
-    return json.dumps({'success':True}), 200, {'ContentType':'application/json'} 
-    
+    elif (keyCode == 46):
+        sphere.show_controls = False if sphere.show_controls else True
+    elif (keyCode == 49):
+        pick, L, V = sphere.collapse(sphere.paulis()[0][0])
+        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        stuff["pick"] = message
+        stuff["collapsed"] = True
+    elif (keyCode == 50):
+        pick, L, V = sphere.collapse(sphere.paulis()[0][1])
+        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        stuff["pick"] = message
+        stuff["collapsed"] = True
+    elif (keyCode == 51):
+        pick, L, V = sphere.collapse(sphere.paulis()[0][2])
+        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        stuff["pick"] = message
+        stuff["collapsed"] = True
+    elif (keyCode == 52):
+        if sphere.energy != None:
+            pick, L, V = sphere.collapse(sphere.energy)
+            message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+            stuff["pick"] = message
+            stuff["collapsed"] = True
+    elif (keyCode == 53):
+        pick, L, V = sphere.collapse(qt.rand_herm(sphere.n()))
+        message = "%.2f of %s!" % (L[pick], np.array_str(L, precision=2, suppress_small=True))
+        stuff["pick"] = message
+        stuff["collapsed"] = True
+    return json.dumps(stuff), 200, {'ContentType':'application/json'} 
+
 ##################################################################################################################
 
 if __name__ == '__main__':

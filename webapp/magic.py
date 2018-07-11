@@ -84,7 +84,10 @@ def polynomial_C(polynomial):
         else:
             break
     poles = [float('Inf') for i in range(zeros)]
-    roots = [complex(root) for root in mpmath.polyroots(polynomial)]
+    try:
+        roots = [complex(root) for root in mpmath.polyroots(polynomial)]
+    except:
+        roots = [float('Inf') for i in range(len(polynomial)-zeros)]
     return poles+roots
 
 def C_v(roots):
