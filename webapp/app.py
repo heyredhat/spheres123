@@ -6,8 +6,8 @@ sphere = Sphere(state=qt.rand_ket(3),\
                 evolving=True,\
                 show_phase=True,\
                 show_components=False,\
-                show_projection=False,\
-                calculate_husimi=False)
+                show_husimi=False,\
+                show_projection=False)
 
 ##################################################################################################################
 
@@ -40,11 +40,11 @@ def animate():
     global sphere
     while True:
         sphere.update()
-        husimi = sphere.husimi() if sphere.calculate_husimi else []
         phase = sphere.phase() if sphere.show_phase else []
         component_stars = sphere.component_stars() if sphere.show_components else []
         plane_stars = sphere.plane_stars() if sphere.show_projection else []
         plane_component_stars = sphere.plane_component_stars() if sphere.show_projection and sphere.show_components else []
+        husimi = sphere.husimi() if sphere.show_husimi else []
         sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
                             "stars" : sphere.stars(),\
                             "state" : sphere.pretty_state(),\
@@ -53,7 +53,7 @@ def animate():
                             "component_stars" : component_stars,\
                             "plane_stars" : plane_stars,\
                             "plane_component_stars" : plane_component_stars,\
-                            "husimi" : husimi})
+                            "husimi" : husimi});
         sio.emit("animate", sioEmitData)
         sio.sleep(0)
 
@@ -85,8 +85,6 @@ def key_press():
         sphere.random_state()
     elif (keyCode == 111):
         sphere.random_energy()
-    elif (keyCode == 112) :
-        sphere.calculate_husimi = False if sphere.calculate_husimi else True
     elif (keyCode == 106):
         sphere.show_projection = False if sphere.show_projection else True
     elif (keyCode == 107):
@@ -97,12 +95,14 @@ def key_press():
         sphere.dt = sphere.dt-0.001
     elif (keyCode == 93):
         sphere.dt = sphere.dt+0.001
+    elif (keyCode == 112):
+        sphere.show_husimi = False if sphere.show_husimi else True
     elif (keyCode == 113):
         sphere.destroy_star()
     elif (keyCode == 101):
         sphere.create_star()
-    return Response()
-
+    return json.dumps({'success':True}), 200, {'ContentType':'application/json'} 
+    
 ##################################################################################################################
 
 if __name__ == '__main__':

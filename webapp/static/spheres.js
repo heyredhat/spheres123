@@ -308,10 +308,6 @@ function render (response) {
 
 var spheresSocket = io.connect(null, {port: location.port, rememberTransport: false});
 spheresSocket.on("animate", function(socketData) {
-	render(JSON.parse(socketData));
-});
-
-function animate () {
 	if (show_controls == true) {
 		$.ajax({
 			url: "/controls/",
@@ -327,6 +323,10 @@ function animate () {
 			}
 		});
 	}
+	render(JSON.parse(socketData));
+});
+
+function animate () {
 	requestAnimationFrame(animate);
 	camera_controls.update();
 	renderer.render(scene, camera);
