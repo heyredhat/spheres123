@@ -93,7 +93,13 @@ class Sphere:
 
     def plane_stars(self):
         C = v_C(self.state.full().T[0])
-        return [[c.real, c.imag, 0] for c in C]
+        xyz = []
+        for c in C:
+            if c == float('Inf'):
+                xyz.append([1000,1000,0])
+            else:
+                xyz.append([c.real, c.imag, 0])
+        return xyz
  
     def component_stars(self):
         #components = self.state.full().T[0].tolist()
@@ -106,8 +112,25 @@ class Sphere:
        C = v_polynomial(self.state.full().T[0])
        return [[c.real, c.imag, 0] for c in C] 
 
-    def allstars(self):
-        pass
+    def allstars(self, stars=True, plane_stars=True, component_stars=True, plane_component_stars=True):
+        stuff = {}
+        polynomial = v_polynomial(self.state.full().T[0])
+        stuff["component_stars"] = [c_xyz(c) for c in polynomial] if component_stars else []
+        stuff["plane_component_stars"] = [[c.real, c.imag, 0] for c in polynomial] if plane_component_stars else []
+        if stars or plane_stars:
+            roots = polynomial_C(polynomial) 
+            if plane_stars:
+                planeStars = []
+                for c in roots:
+                    if c == float('Inf'):
+                        planeStars.append([1000,1000,0])
+                    else:
+                        planeStars.append([c.real, c.imag, 0])
+                stuff["plane_stars"] = planeStars
+            else:
+                stuff["plane_stars"] = []
+            stuff["stars"] = [c_xyz(c) for c in roots] if stars else []                
+        return stuff
 
     def set_stars(self, new_stars):
         self.state = SurfaceXYZ_q(new_stars)

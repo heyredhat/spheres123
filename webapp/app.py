@@ -34,19 +34,19 @@ def animate():
     while True:
         sphere.update()
         phase = sphere.phase() if sphere.show_phase else []
-        component_stars = sphere.component_stars() if sphere.show_components else []
-        plane_stars = sphere.plane_stars() if sphere.show_projection else []
-        plane_component_stars = sphere.plane_component_stars() if sphere.show_projection and sphere.show_components else []
+        stuff = sphere.allstars(plane_stars=sphere.show_projection,\
+                                component_stars=sphere.show_components,\
+                                plane_component_stars=sphere.show_projection and sphere.show_components)
         husimi = sphere.husimi() if sphere.show_husimi else []
         controls = sphere.controls() if sphere.show_controls else ""
         sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
-                            "stars" : sphere.stars(),\
+                            "stars" : stuff["stars"],\
                             "state" : sphere.pretty_state(),\
                             "dt" : sphere.dt,\
                             "phase" : phase,\
-                            "component_stars" : component_stars,\
-                            "plane_stars" : plane_stars,\
-                            "plane_component_stars" : plane_component_stars,\
+                            "component_stars" : stuff["component_stars"],\
+                            "plane_stars" : stuff["plane_stars"],\
+                            "plane_component_stars" : stuff["plane_component_stars"],\
                             "husimi" : husimi,\
                             "controls" : controls});
         sio.emit("animate", sioEmitData)
