@@ -44,7 +44,8 @@ var plane_stars = [];
 var plane_arrows = [];
 var component_plane_stars = [];
 var component_plane_arrows = [];
-var husimi_pts = [];
+
+var husimi_pts = false;
 
 /************************************************************************************************************/
 
@@ -66,6 +67,34 @@ document.addEventListener( 'mousedown',
 
 /************************************************************************************************************/
 
+function start_server () {
+	$.ajax({
+		url: "/start/",
+		dataType: "json",
+		success: function (response) { },
+		error: function (response) {
+			console.log("error!: " + response.responseText);
+		},
+		always: function (response) {
+			console.log("haylp!: " + response.responseText);
+		}
+	});
+}
+
+function stop_server () {
+	$.ajax({
+		url: "/stop/",
+		dataType: "json",
+		success: function (response) { },
+		error: function (response) {
+			console.log("error!: " + response.responseText);
+		},
+		always: function (response) {
+			console.log("haylp!: " + response.responseText);
+		}
+	});
+}
+
 document.addEventListener("keypress", function (event) {
 	var keyCode = event.which;
 	if (keyCode == 47) {
@@ -82,6 +111,7 @@ document.addEventListener("keypress", function (event) {
 				if(response["collapsed"] == true) {
 					pick = response["pick"];
 					alert(pick);
+					start_server();
 				}
 			},
 			error: function (response) {
@@ -263,29 +293,41 @@ function render (response) {
 
 	// Update husimi
 	if (new_husimi.length != 0) {
-		if (husimi_pts.length == 0) {
+		if (husimi_pts == false) {
+			stop_server();
+
+			var husimi_geometry = new THREE.Geometry();
+			husimi_geometry.dynamic = true;
+			var husimi_colors = [];
 			for (i = 0; i < new_husimi.length; ++i) {
+				var pt = new THREE.Vector3();
+				pt.x = new_husimi[i][1][0];
+				pt.y = new_husimi[i][1][1];
+				pt.z = new_husimi[i][1][2];
+				husimi_geometry.vertices.push(pt);
+
 				var color = new THREE.Color();
 				color.setHSL(0.6, 0, new_husimi[i][0]);
-				var point_geometry = new THREE.SphereGeometry(0.03, 32, 32);
-				var point_material = new THREE.MeshPhongMaterial({ color: color });
-				var point = new THREE.Mesh(point_geometry, point_material);
-				point.position.set(new_husimi[i][1][0], new_husimi[i][1][1], new_husimi[i][1][2]);
-				husimi_pts.push(point);
-				scene.add(point);
+				husimi_colors.push(color);
 			}
+			husimi_geometry.colors = husimi_colors;
+			var husimi_material = new THREE.PointsMaterial({ vertexColors: THREE.VertexColors, size: 0.1 });
+			husimi_material.transparent = true;
+			husimi_material.opacity = 1;
+			husimi_pts = new THREE.Points(husimi_geometry, husimi_material);
+			scene.add(husimi_pts);
+
+			start_server();
 		} else {
 			for (i = 0; i < new_husimi.length; ++i) {
-				//husimi_pts[i].position.set(new_husimi[i][1][0], new_husimi[i][1][1], new_husimi[i][1][2]);
-				husimi_pts[i].material.color.setHSL(0.6, 0, new_husimi[i][0]);
+				husimi_pts.geometry.colors[i].setHSL(0.6, 0, new_husimi[i][0]);
 			}
+			husimi_pts.geometry.colorsNeedUpdate = true;
 		}
 	} else {
-		if (husimi_pts.length != 0) {
-			for (i = 0; i < husimi_pts.length; ++i) {
-				scene.remove(husimi_pts[i]);
-			}
-			husimi_pts = [];
+		if (husimi_pts != false) {
+			scene.remove(husimi_pts);
+			husimi_pts = false;
 		}
 	}
 

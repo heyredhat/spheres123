@@ -24,32 +24,38 @@ app = Flask("spheres")
 app.wsgi_app = socketio.Middleware(sio, app.wsgi_app)
 thread = None
 
-log = logging.getLogger('werkzeug')
-log.disabled = True
-app.logger.disabled = True
+#log = logging.getLogger('werkzeug')
+#log.disabled = True
+#app.logger.disabled = True
+
+running = True
 
 def animate():
     global sphere
+    global running
     while True:
-        sphere.update()
-        phase = sphere.phase() if sphere.show_phase else []
-        stuff = sphere.allstars(plane_stars=sphere.show_projection,\
-                                component_stars=sphere.show_components,\
-                                plane_component_stars=sphere.show_projection and sphere.show_components)
-        husimi = sphere.husimi() if sphere.show_husimi else []
-        controls = sphere.controls() if sphere.show_controls else ""
-        sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
-                            "stars" : stuff["stars"],\
-                            "state" : sphere.pretty_state(),\
-                            "dt" : sphere.dt,\
-                            "phase" : phase,\
-                            "component_stars" : stuff["component_stars"],\
-                            "plane_stars" : stuff["plane_stars"],\
-                            "plane_component_stars" : stuff["plane_component_stars"],\
-                            "husimi" : husimi,\
-                            "controls" : controls});
-        sio.emit("animate", sioEmitData)
-        sio.sleep(0)
+        if running:
+            sphere.update()
+            phase = sphere.phase() if sphere.show_phase else []
+            stuff = sphere.allstars(plane_stars=sphere.show_projection,\
+                                    component_stars=sphere.show_components,\
+                                    plane_component_stars=sphere.show_projection and sphere.show_components)
+            husimi = sphere.husimi() if sphere.show_husimi else []
+            controls = sphere.controls() if sphere.show_controls else ""
+            sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
+                                "stars" : stuff["stars"],\
+                                "state" : sphere.pretty_state(),\
+                                "dt" : sphere.dt,\
+                                "phase" : phase,\
+                                "component_stars" : stuff["component_stars"],\
+                                "plane_stars" : stuff["plane_stars"],\
+                                "plane_component_stars" : stuff["plane_component_stars"],\
+                                "husimi" : husimi,\
+                                "controls" : controls});
+            sio.emit("animate", sioEmitData)
+            sio.sleep(0)
+        else:
+            sio.sleep(0)
 
 @app.route("/")
 def root():
@@ -60,6 +66,7 @@ def root():
 
 @app.route("/keypress/")
 def key_press():
+    global running
     global sphere
     keyCode = int(request.args.get('keyCode'))
     stuff = {'success':True, 'collapsed':False}
@@ -100,32 +107,49 @@ def key_press():
     elif (keyCode == 46):
         sphere.show_controls = False if sphere.show_controls else True
     elif (keyCode == 49):
+        running = False
         pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
         message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     elif (keyCode == 50):
+        running = False
         pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
         message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     elif (keyCode == 51):
+        running = False
         pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
         message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     elif (keyCode == 52):
         if sphere.energy != None:
+            running = False
             pick, L, probabilities = sphere.collapse(sphere.energy)
             message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             stuff["pick"] = message
             stuff["collapsed"] = True
     elif (keyCode == 53):
+        running = False
         pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
         message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         stuff["pick"] = message
         stuff["collapsed"] = True
     return json.dumps(stuff), 200, {'ContentType':'application/json'} 
+
+@app.route("/start/")
+def start():
+    global running
+    running = True
+    return json.dumps({"success": True}), 200, {'ContentType':'application/json'} 
+
+@app.route("/stop/")
+def stop():
+    global running
+    running = False
+    return json.dumps({"success": True}), 200, {'ContentType':'application/json'} 
 
 ##################################################################################################################
 
