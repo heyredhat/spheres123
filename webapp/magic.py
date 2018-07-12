@@ -26,6 +26,12 @@ def projectors(operator):
     V = [v.ptrace(0) for v in V]
     return L, V
 
+def evolver(state, operator, dt=0.01, inverse=False):
+    unitary = (-2*math.pi*1j*operator*dt).expm()
+    if inverse:
+        unitary = unitary.dag()
+    return unitary*state
+
 ##################################################################################################################
 
 def c_xyz(c):
@@ -38,7 +44,7 @@ def c_xyz(c):
             (-1.+(x**2)+(y**2))/(1.+(x**2)+(y**2))]
 
 def xyz_c(xyz):
-    x, y, z = xyz[0], xyz[1], xyz[2]
+    x, y, z = -1*xyz[0], xyz[1], xyz[2]
     if z == 1:
         return float('inf') 
     else:

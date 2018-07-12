@@ -51,6 +51,7 @@ var husimi_pts = false;
 
 var raycaster = new THREE.Raycaster();
 var mouse = new THREE.Vector2();
+var selected = "sphere";
 
 document.addEventListener( 'mousedown', 
 	function ( event ) {
@@ -58,16 +59,32 @@ document.addEventListener( 'mousedown',
 		mouse.x = ( event.clientX / renderer.domElement.clientWidth ) * 2 - 1;
 		mouse.y = - ( event.clientY / renderer.domElement.clientHeight ) * 2 + 1;
 		raycaster.setFromCamera( mouse, camera );
-		var intersects = raycaster.intersectObjects( stars );
-		if ( intersects.length > 0 ) {
-
-			intersects[ 0 ].object.material.color.setHex( Math.random() * 0xffffff );
+		objects = [sphere].concat(stars).concat(component_stars);
+		var intersections = raycaster.intersectObjects(objects);
+		if (intersections.length > 0) {
+			object = intersections[0].object;
+			if (object == sphere) {
+				selected = "sphere";
+			} else {
+				star_index = stars.indexOf(object);
+				if (star_index != -1) {
+					selected = "star_" + star_index.toString();
+				} else {
+					component_index = component_stars.indexOf(object);
+					if (component_index != -1) {
+						selected = "component_" + component_index.toString();
+					} else {
+						selected = "sphere";
+					}
+				}
+			}
+			//intersections[0].object.material.color.setHex( Math.random() * 0xffffff );
 		}
-		}, false );
+	}, false );
 
 /************************************************************************************************************/
 
-function start_server () {
+/*function start_server () {
 	$.ajax({
 		url: "/start/",
 		dataType: "json",
@@ -93,7 +110,25 @@ function stop_server () {
 			console.log("haylp!: " + response.responseText);
 		}
 	});
-}
+}*/
+
+/************************************************************************************************************/
+
+var spheresSocket = io.connect(null, {port: location.port, rememberTransport: false});
+
+spheresSocket.on("animate", function(socketData) {
+	spheresSocket.emit("selected", {"selected": selected});
+	render(JSON.parse(socketData));
+});
+
+spheresSocket.on("collapsed", function(socketData) {
+	//stuff = JSON.parse(socketData);
+	//spheresSocket.emit("stop");
+	alert(socketData["message"]);
+	spheresSocket.emit("start");
+});
+
+/************************************************************************************************************/
 
 document.addEventListener("keypress", function (event) {
 	var keyCode = event.which;
@@ -104,7 +139,12 @@ document.addEventListener("keypress", function (event) {
     	status_pane = document.getElementById("status");
     	status_pane.style.display = status_pane.style.display == "none" ? "block" : "none";
     } else {
-		$.ajax({
+    	if (keyCode == 113 || keyCode == 101) {
+    		selected = "sphere";
+    	} 
+    	spheresSocket.emit("keypress", {"keyCode": keyCode});
+
+		/*$.ajax({
 			url: "/keypress/?keyCode=" + keyCode,
 			dataType: "json",
 			success: function (response) { 
@@ -120,9 +160,11 @@ document.addEventListener("keypress", function (event) {
 			always: function (response) {
 				console.log("haylp!: " + response.responseText);
 			}
-		});
+		});*/
 	}
 });
+
+
 
 /************************************************************************************************************/
 
@@ -294,8 +336,6 @@ function render (response) {
 	// Update husimi
 	if (new_husimi.length != 0) {
 		if (husimi_pts == false) {
-			stop_server();
-
 			var husimi_geometry = new THREE.Geometry();
 			husimi_geometry.dynamic = true;
 			var husimi_colors = [];
@@ -316,8 +356,6 @@ function render (response) {
 			husimi_material.opacity = 1;
 			husimi_pts = new THREE.Points(husimi_geometry, husimi_material);
 			scene.add(husimi_pts);
-
-			start_server();
 		} else {
 			for (i = 0; i < new_husimi.length; ++i) {
 				husimi_pts.geometry.colors[i].setHSL(0.6, 0, new_husimi[i][0]);
@@ -354,11 +392,6 @@ function render (response) {
 	    }
 	}	
 }
-
-var spheresSocket = io.connect(null, {port: location.port, rememberTransport: false});
-spheresSocket.on("animate", function(socketData) {
-	render(JSON.parse(socketData));
-});
 
 function animate () {
 	requestAnimationFrame(animate);

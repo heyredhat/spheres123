@@ -74,6 +74,28 @@ class Sphere:
         elif pole == "z":
             self.evolve(qt.jmat(self.spin(), "z"), inverse=inverse)
 
+    def rotate_star(self, index, pole, inverse=False):
+        roots = q_SurfaceXYZ(self.state)
+        root = roots[index]
+        root_state = SurfaceXYZ_q([root])
+        root_state = evolver(root_state, qt.jmat(0.5, pole), inverse=inverse)
+        new_xyz = q_SurfaceXYZ(root_state)[0]
+        roots[index] = new_xyz
+        self.state = SurfaceXYZ_q(roots)
+
+    def rotate_component(self, index, pole, inverse=False):
+        polynomial = v_polynomial(self.state.full().T[0])
+        component = polynomial[index]
+        component_xyz = c_xyz(component)
+        component_state = SurfaceXYZ_q([component_xyz])
+        component_state = evolver(component_state, qt.jmat(0.5, pole), inverse=inverse)
+        new_xyz = q_SurfaceXYZ(component_state)[0]
+        new_component = xyz_c(new_xyz)
+        if (new_component != float('Inf')):
+            polynomial[index] = new_component
+        new_vector = polynomial_v(polynomial)
+        self.state = qt.Qobj(new_vector)
+
     def collapse(self, operator):
         L, V = operator.eigenstates()
         amplitudes = [self.state.overlap(v) for v in V]
