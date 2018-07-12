@@ -75,15 +75,25 @@ class Sphere:
             self.evolve(qt.jmat(self.spin(), "z"), inverse=inverse)
 
     def rotate_star(self, index, pole, inverse=False):
+        #print("*****")
+        #print(self.state)
         roots = q_SurfaceXYZ(self.state)
+        #print(roots)
         root = roots[index]
+        #print(root)
         root_state = SurfaceXYZ_q([root])
+        #print(root_state)
         root_state = evolver(root_state, qt.jmat(0.5, pole), inverse=inverse)
+       #print(root_state)
         new_xyz = q_SurfaceXYZ(root_state)[0]
+        #print(new_xyz)
         roots[index] = new_xyz
+        #print(roots)
+        #print(SurfaceXYZ_q(roots))
+        #print("******")
         self.state = SurfaceXYZ_q(roots)
 
-    def rotate_component(self, index, pole, inverse=False):
+    def rotate_component(self, index, pole, inverse=False, unitary=True):
         polynomial = v_polynomial(self.state.full().T[0])
         component = polynomial[index]
         component_xyz = c_xyz(component)
@@ -94,7 +104,10 @@ class Sphere:
         if (new_component != float('Inf')):
             polynomial[index] = new_component
         new_vector = polynomial_v(polynomial)
-        self.state = qt.Qobj(new_vector)
+        if unitary:
+            self.state = qt.Qobj(new_vector).unit()
+        else:
+            self.state = qt.Qobj(new_vector)
 
     def collapse(self, operator):
         L, V = operator.eigenstates()
@@ -104,6 +117,7 @@ class Sphere:
         pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
         projector = V[pick].ptrace(0)
         self.state = (projector*self.state).unit()
+        #print("collapsed!")
         return pick, L, probabilities
 
     def update(self):
@@ -175,8 +189,8 @@ class Sphere:
 
     def pretty_state(self):
         vec = self.state.full().T[0]
-        s = np.array_str(vec, max_line_width=100, precision=2, suppress_small=True) + " aka\n"
-        s += "        [" + " ".join(["%.2f^%.2f" % (abs(c), cmath.phase(c)) for c in self.state.full().T[0]]) + "]"
+        s = np.array_str(vec, max_line_width=500, precision=2, suppress_small=True) + " aka<br />"
+        s += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[" + " ".join(["%.2f^%.2f" % (abs(c), cmath.phase(c)) for c in self.state.full().T[0]]) + "]"
         return s
 
     def husimi(self):

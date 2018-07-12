@@ -11,6 +11,7 @@ window.addEventListener('resize', function (event) {
 	renderer.setSize(window.innerWidth, window.innerHeight);
 	camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
+
 });
 
 var light = new THREE.AmbientLight(0xffffff);
@@ -124,8 +125,10 @@ spheresSocket.on("animate", function(socketData) {
 spheresSocket.on("collapsed", function(socketData) {
 	//stuff = JSON.parse(socketData);
 	//spheresSocket.emit("stop");
-	alert(socketData["message"]);
-	spheresSocket.emit("start");
+	//alert(socketData["message"]);
+	//console.log(socketData["message"]);
+	document.getElementById("last_collapse").innerHTML = "last collapse: " + socketData["message"];
+	//spheresSocket.emit("start");
 });
 
 /************************************************************************************************************/
@@ -374,9 +377,9 @@ function render (response) {
 
 	// Update help
 	if (dt < 0) {
-		document.getElementById("dt").innerHTML = new_dt.toFixed(3);
+		document.getElementById("dt").innerHTML = new_dt.toFixed(4);
 	} else {
-		document.getElementById("dt").innerHTML = new_dt.toFixed(3) + " ";
+		document.getElementById("dt").innerHTML = new_dt.toFixed(4) + " ";
 	}	
 
 	// Update controls

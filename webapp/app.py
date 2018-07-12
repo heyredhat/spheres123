@@ -28,35 +28,30 @@ thread = None
 #log.disabled = True
 #app.logger.disabled = True
 
-running = True
 selected = "sphere";
 
 def animate():
     global sphere
-    global running
     while True:
-        if running:
-            sphere.update()
-            phase = sphere.phase() if sphere.show_phase else []
-            stuff = sphere.allstars(plane_stars=sphere.show_projection,\
-                                    component_stars=sphere.show_components,\
-                                    plane_component_stars=sphere.show_projection and sphere.show_components)
-            husimi = sphere.husimi() if sphere.show_husimi else []
-            controls = sphere.controls() if sphere.show_controls else ""
-            sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
-                                "stars" : stuff["stars"],\
-                                "state" : sphere.pretty_state(),\
-                                "dt" : sphere.dt,\
-                                "phase" : phase,\
-                                "component_stars" : stuff["component_stars"],\
-                                "plane_stars" : stuff["plane_stars"],\
-                                "plane_component_stars" : stuff["plane_component_stars"],\
-                                "husimi" : husimi,\
-                                "controls" : controls});
-            sio.emit("animate", sioEmitData)
-            sio.sleep(0)
-        else:
-            sio.sleep(0)
+        sphere.update()
+        phase = sphere.phase() if sphere.show_phase else []
+        stuff = sphere.allstars(plane_stars=sphere.show_projection,\
+                                component_stars=sphere.show_components,\
+                                plane_component_stars=sphere.show_projection and sphere.show_components)
+        husimi = sphere.husimi() if sphere.show_husimi else []
+        controls = sphere.controls() if sphere.show_controls else ""
+        sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
+                            "stars" : stuff["stars"],\
+                            "state" : sphere.pretty_state(),\
+                            "dt" : sphere.dt,\
+                            "phase" : phase,\
+                            "component_stars" : stuff["component_stars"],\
+                            "plane_stars" : stuff["plane_stars"],\
+                            "plane_component_stars" : stuff["plane_component_stars"],\
+                            "husimi" : husimi,\
+                            "controls" : controls});
+        sio.emit("animate", sioEmitData)
+        sio.sleep(0)
 
 @sio.on("selected")
 def select(sid, data):
@@ -70,56 +65,61 @@ def root():
         thread = sio.start_background_task(animate)
     return render_template("spheres.html")
 
+unitary_component = True
 #@app.route("/keypress/")
 @sio.on("keypress")
 def key_press(sid, data):
     global running
+    global unitary_component
     global sphere
     #keyCode = int(request.args.get('keyCode'))
     keyCode = int(data["keyCode"])
     #stuff = {'success':True, 'collapsed':False}
+    #print(keyCode)
     if (keyCode == 97):
         if selected.startswith("star"):
             sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=True)
         elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=True)
+            sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=True, unitary=unitary_component)
         else:
             sphere.rotate("x", inverse=True)
     elif (keyCode == 100):            
         if selected.startswith("star"):
             sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=False)
         elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=False)
+            sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=False, unitary=unitary_component)
         else:
             sphere.rotate("x", inverse=False)
     elif (keyCode == 115):
         if selected.startswith("star"):
             sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=True)
         elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=True)
+            sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=True, unitary=unitary_component)
         else:
             sphere.rotate("y", inverse=True)
     elif (keyCode == 119):
         if selected.startswith("star"):
             sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=False)
         elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=False)
+            sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=False, unitary=unitary_component)
         else:
             sphere.rotate("y", inverse=False)
     elif (keyCode == 122):
         if selected.startswith("star"):
             sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=True)
         elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=True)
+            sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=True, unitary=unitary_component)
         else:
             sphere.rotate("z", inverse=True)
     elif (keyCode == 120):
         if selected.startswith("star"):
             sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=False)
         elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=False)
+            sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=False, unitary=unitary_component)
         else:
             sphere.rotate("z", inverse=False)
+    elif (keyCode == 48): # 0
+        unitary_component = False if unitary_component else True
     elif (keyCode == 117):
         sphere.evolving = False if sphere.evolving else True
     elif (keyCode == 105):
@@ -133,9 +133,9 @@ def key_press(sid, data):
     elif (keyCode == 108):
         sphere.show_phase = False if sphere.show_phase else True
     elif (keyCode == 91):
-        sphere.dt = sphere.dt-0.001
+        sphere.dt = sphere.dt-0.00025
     elif (keyCode == 93):
-        sphere.dt = sphere.dt+0.001
+        sphere.dt = sphere.dt+0.00025
     elif (keyCode == 112):
         sphere.show_husimi = False if sphere.show_husimi else True
     elif (keyCode == 113):
@@ -145,38 +145,39 @@ def key_press(sid, data):
     elif (keyCode == 46):
         sphere.show_controls = False if sphere.show_controls else True
     elif (keyCode == 49):
-        running = False
+        #running = False
         pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
-        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+        #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         sio.emit("collapsed", {"message": message})
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     elif (keyCode == 50):
-        running = False
+        #running = False
         pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
-        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         sio.emit("collapsed", {"message": message})
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     elif (keyCode == 51):
-        running = False
+        #running = False
         pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
-        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         sio.emit("collapsed", {"message": message})
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     elif (keyCode == 52):
         if sphere.energy != None:
-            running = False
+            #running = False
             pick, L, probabilities = sphere.collapse(sphere.energy)
-            message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", {"message": message})
             #stuff["pick"] = message
             #stuff["collapsed"] = True
     elif (keyCode == 53):
-        running = False
+        #running = False
         pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
-        message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         sio.emit("collapsed", {"message": message})
         #stuff["pick"] = message
         #stuff["collapsed"] = True
@@ -185,7 +186,7 @@ def key_press(sid, data):
 @sio.on("start")
 def start(sid):
     global running
-    #print("starting...")
+    print("starting...")
     running = True
     #return json.dumps({"success": True}), 200, {'ContentType':'application/json'} 
 

@@ -44,7 +44,7 @@ def c_xyz(c):
             (-1.+(x**2)+(y**2))/(1.+(x**2)+(y**2))]
 
 def xyz_c(xyz):
-    x, y, z = -1*xyz[0], xyz[1], xyz[2]
+    x, y, z = xyz[0], xyz[1], xyz[2]
     if z == 1:
         return float('inf') 
     else:
@@ -79,7 +79,7 @@ def C_polynomial(roots):
     zeros = roots.count(float('Inf'))
     roots = [root for root in roots if root != float('Inf')]
     s = sympy.symbols("s")
-    polynomial = sympy.Poly(functools.reduce(lambda a, b: a*b, [s-np.conjugate(root) for root in roots]), domain="CC")
+    polynomial = sympy.Poly(functools.reduce(lambda a, b: a*b, [s-root for root in roots]), domain="CC")
     return [complex(0,0)]*zeros + [complex(c) for c in polynomial.coeffs()]
 
 def polynomial_C(polynomial):
@@ -112,4 +112,21 @@ def q_SurfaceXYZ(q):
     return v_SurfaceXYZ(q.full().T[0])
 
 def SurfaceXYZ_q(XYZ):
-    return qt.Qobj(SurfaceXYZ_v(XYZ))
+    return qt.Qobj(SurfaceXYZ_v(XYZ)).unit()
+
+
+##################################################################################################################
+if __name__ == '__main__':
+    qubit = qt.rand_ket(2)
+    xyz = q_SurfaceXYZ(qubit)
+    new_qubit = SurfaceXYZ_q(xyz)
+    xyz2 = q_SurfaceXYZ(new_qubit)
+
+    v = qubit.full().T[0]
+    polynomial = v_polynomial(v)
+    v2 = polynomial_v(polynomial)
+
+    C = polynomial_C2(polynomial) 
+    poly2 = C_polynomial2(C)
+
+
