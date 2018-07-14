@@ -148,21 +148,21 @@ def key_press(sid, data):
         pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
         #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
         message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", {"message": message})
+        sio.emit("collapsed", json.dumps({"message": message}))
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     elif (keyCode == 50):
         #running = False
         pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
         message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", {"message": message})
+        sio.emit("collapsed", json.dumps({"message": message}))
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     elif (keyCode == 51):
         #running = False
         pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
         message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", {"message": message})
+        sio.emit("collapsed", json.dumps({"message": message}))
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     elif (keyCode == 52):
@@ -170,14 +170,14 @@ def key_press(sid, data):
             #running = False
             pick, L, probabilities = sphere.collapse(sphere.energy)
             message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-            sio.emit("collapsed", {"message": message})
+            sio.emit("collapsed", json.dumps({"message": message}))
             #stuff["pick"] = message
             #stuff["collapsed"] = True
     elif (keyCode == 53):
         #running = False
         pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
         message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", {"message": message})
+        sio.emit("collapsed", json.dumps({"message": message}))
         #stuff["pick"] = message
         #stuff["collapsed"] = True
     #return json.dumps(stuff), 200, {'ContentType':'application/json'} 
