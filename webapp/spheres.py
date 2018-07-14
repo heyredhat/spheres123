@@ -29,6 +29,8 @@ class Sphere:
         self.precalc_bases = None
         self.precalc_paulis = None
         self.precalc_energy_eigs = None
+        self.precalc_coherents = None
+        self.dim_change = False
 
     def n(self):
         return self.state.shape[0]
@@ -43,7 +45,7 @@ class Sphere:
     def spin(self):
         return (self.n()-1.)/2.
 
-    def spin_axis(self):
+    def spin_axis2(self):
         mink = np.array([qt.expect(qt.identity(self.n()), self.state),\
                          qt.expect(qt.jmat(self.spin(), "x"), self.state),\
                          -1*qt.expect(qt.jmat(self.spin(), "y"), self.state),\
@@ -52,6 +54,13 @@ class Sphere:
         direction = normalize(axis).tolist()
         length = np.linalg.norm(axis)
         return [direction, length]
+
+    def spin_axis(self):
+        direction = np.array([qt.expect(qt.jmat(self.spin(), "x"), self.state),\
+                              -1*qt.expect(qt.jmat(self.spin(), "y"), self.state),\
+                              -1*qt.expect(qt.jmat(self.spin(), "z"), self.state)])
+        spin_squared = np.sqrt(np.sum(direction**2))
+        return [normalize(direction).tolist(), spin_squared]
 
     def phase(self):
         vec = self.state.full().T[0]
@@ -68,13 +77,13 @@ class Sphere:
 
     def rotate(self, pole, inverse=False):
         if pole == "x":
-            self.evolve(qt.jmat(self.spin(), "x"), inverse=inverse)
+            self.evolve(qt.jmat(self.spin(), "x"), dt=self.dt, inverse=inverse)
         elif pole == "y":
-            self.evolve(qt.jmat(self.spin(), "y"), inverse=inverse)
+            self.evolve(qt.jmat(self.spin(), "y"), dt=self.dt, inverse=inverse)
         elif pole == "z":
-            self.evolve(qt.jmat(self.spin(), "z"), inverse=inverse)
+            self.evolve(qt.jmat(self.spin(), "z"), dt=self.dt, inverse=inverse)
 
-    def rotate_star(self, index, pole, inverse=False):
+    def rotate_star(self, index, pole, dt=0.01, inverse=False):
         #print("*****")
         #print(self.state)
         roots = q_SurfaceXYZ(self.state)
@@ -83,7 +92,7 @@ class Sphere:
         #print(root)
         root_state = SurfaceXYZ_q([root])
         #print(root_state)
-        root_state = evolver(root_state, qt.jmat(0.5, pole), inverse=inverse)
+        root_state = evolver(root_state, qt.jmat(0.5, pole), dt=self.dt, inverse=inverse)
        #print(root_state)
         new_xyz = q_SurfaceXYZ(root_state)[0]
         #print(new_xyz)
@@ -93,12 +102,12 @@ class Sphere:
         #print("******")
         self.state = SurfaceXYZ_q(roots)
 
-    def rotate_component(self, index, pole, inverse=False, unitary=True):
+    def rotate_component(self, index, pole, dt=0.01, inverse=False, unitary=True):
         polynomial = v_polynomial(self.state.full().T[0])
         component = polynomial[index]
         component_xyz = c_xyz(component)
         component_state = SurfaceXYZ_q([component_xyz])
-        component_state = evolver(component_state, qt.jmat(0.5, pole), inverse=inverse)
+        component_state = evolver(component_state, qt.jmat(0.5, pole), dt=self.dt, inverse=inverse)
         new_xyz = q_SurfaceXYZ(component_state)[0]
         new_component = xyz_c(new_xyz)
         if (new_component != float('Inf')):
@@ -178,6 +187,7 @@ class Sphere:
         self.hermitian_bases(reset=True)
         self.paulis(reset=True)
         self.eigenenergies(reset=True)
+        self.dim_change = True
 
     def destroy_star(self):
         if self.n() > 2:
@@ -186,6 +196,7 @@ class Sphere:
             self.hermitian_bases(reset=True)
             self.paulis(reset=True)
             self.eigenenergies(reset=True)
+            self.dim_change = True
 
     def pretty_state(self):
         vec = self.state.full().T[0]
@@ -193,11 +204,36 @@ class Sphere:
         s += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[" + " ".join(["%.2f^%.2f" % (abs(c), cmath.phase(c)) for c in self.state.full().T[0]]) + "]"
         return s
 
-    def husimi(self):
+    def husimi2(self):
         N = 25
         theta = np.linspace(0, math.pi, N)
         phi = np.linspace(0, 2*math.pi, N)
         Q, THETA, PHI = qt.spin_q_function(self.state, theta, phi)
+        pts = []
+        for i, j, k in zip(Q, THETA, PHI):
+            for q, t, p in zip(i, j, k):
+                pts.append([q, sph_xyz(t, p)])
+        return pts
+
+    def coherent_states(self, N=25, reset=False):
+        if self.precalc_coherents == None or reset == True or self.dim_change == True:
+            theta = np.linspace(0, math.pi, N)
+            phi = np.linspace(0, 2*math.pi, N)
+            THETA, PHI = np.meshgrid(theta, phi)
+            self.precalc_coherents = [[qt.spin_coherent(self.spin(), THETA[i][j], PHI[i][j])\
+                            for j in range(N)] for i in range(N)], THETA, PHI
+            self.dim_change = False
+        return self.precalc_coherents 
+
+    def husimi(self):
+        N = 25
+        coherents, THETA, PHI = self.coherent_states(N=N)
+        Q = np.zeros_like(THETA)
+        for i in range(N):
+            for j in range(N):
+                amplitude = self.state.overlap(coherents[i][j])
+                probability = (amplitude*np.conjugate(amplitude)).real
+                Q[-1*i][-1*j] = probability
         pts = []
         for i, j, k in zip(Q, THETA, PHI):
             for q, t, p in zip(i, j, k):

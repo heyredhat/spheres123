@@ -69,7 +69,6 @@ unitary_component = True
 #@app.route("/keypress/")
 @sio.on("keypress")
 def key_press(sid, data):
-    global running
     global unitary_component
     global sphere
     #keyCode = int(request.args.get('keyCode'))
