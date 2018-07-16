@@ -118,17 +118,6 @@ class Sphere:
         else:
             self.state = qt.Qobj(new_vector)
 
-    def collapse(self, operator):
-        L, V = operator.eigenstates()
-        amplitudes = [self.state.overlap(v) for v in V]
-        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
-        probabilities = probabilities/probabilities.sum()
-        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        projector = V[pick].ptrace(0)
-        self.state = (projector*self.state).unit()
-        #print("collapsed!")
-        return pick, L, probabilities
-
     def update(self):
         if self.evolving and self.energy != None:
           self.evolve(self.energy)
@@ -295,3 +284,90 @@ class Sphere:
                 inner = self.state.overlap(v)
                 s += "\t%.2f : %s | %.2f\n" % (L[j].real,'({0.real:.2f} + {0.imag:.2f}i)'.format(inner), (inner*np.conjugate(inner)).real)
         return s[:-1]
+
+    def boost(self, direction, rapidity, inverse=False):
+        if inverse == False:
+            inverse = True
+        else:
+            inverse = False
+        self.state = mink_boost_state(self.state, direction, dt=rapidity, inverse=inverse)
+    
+    def mink_rotate(self, direction, angle, inverse=False):
+        self.state = mink_rotate_state(self.state, direction, dt=angle, inverse=inverse)
+
+    def boson_rotate(self, direction, i, dt, inverse=False):
+        sym = symmeterize(q_qubits(self.state))
+        op = None
+        if direction == "x":
+            op = 0.5*qt.sigmax()
+        elif direction == "y":
+            op = 0.5*qt.sigmay()
+        elif direction == "z":
+            op = 0.5*qt.sigmaz()
+
+        total_op = op if i == 0 else qt.identity(2)
+        for j in range(1, self.n()-1):
+            if j == i:
+                total_op = qt.tensor(total_op, op)
+            else:
+                total_op = qt.tensor(total_op, qt.identity(2))
+        total_op.dims = [[(2**(self.n()-1))], [2**(self.n()-1)]]
+
+        sym2 = evolver(sym, total_op, dt=dt, inverse=inverse)
+        self.state = unsymmeterize(sym2)
+
+    def boson_collapse(self, direction, i):
+        #print("boson_collapse")
+        #print("state")
+        #print(self.state)
+        #print(q_qubits(self.state))
+        sym = symmeterize(q_qubits(self.state))
+        #print("sym")
+        #print(sym)
+        op = None
+        if direction == "x":
+            op = 0.5*qt.sigmax()
+        elif direction == "y":
+            op = 0.5*qt.sigmay()
+        elif direction == "z":
+            op = 0.5*qt.sigmaz()
+        elif direction == "r":
+            op = qt.rand_herm(2)
+
+        total_op = op if i == 0 else qt.identity(2)
+        for j in range(1, self.n()-1):
+            if j == i:
+                total_op = qt.tensor(total_op, op)
+            else:
+                total_op = qt.tensor(total_op, qt.identity(2))
+        total_op.dims = [[(2**(self.n()-1))], [2**(self.n()-1)]]
+
+        #print("total_op")
+        #print(total_op)
+
+        L, V = total_op.eigenstates()
+        amplitudes = [sym.overlap(v) for v in V]
+        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
+        probabilities = probabilities/probabilities.sum()
+        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
+        projector = V[pick].ptrace(0)
+        sym = (projector*sym).unit()
+
+        #print("new_sym")
+        #print(sym)
+        self.state = unsymmeterize(sym)
+
+        #print("new_state")
+       # print(self.state)
+
+    def collapse(self, operator):
+        L, V = operator.eigenstates()
+        amplitudes = [self.state.overlap(v) for v in V]
+        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
+        probabilities = probabilities/probabilities.sum()
+        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
+        projector = V[pick].ptrace(0)
+        self.state = (projector*self.state).unit()
+        #print("collapsed!")
+        return pick, L, probabilities
+

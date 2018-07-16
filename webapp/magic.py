@@ -7,6 +7,8 @@ import functools
 import qutip as qt
 import numpy as np
 import gellman
+import itertools
+import operator
 
 ##################################################################################################################
 
@@ -31,6 +33,9 @@ def evolver(state, operator, dt=0.01, inverse=False):
     if inverse:
         unitary = unitary.dag()
     return unitary*state
+
+def dim_spin(n):
+    return (n-1.)/2.
 
 ##################################################################################################################
 
@@ -76,11 +81,29 @@ def v_polynomial(v):
     return terms[::-1]
 
 def C_polynomial(roots):
+    zeros2 = roots.count(complex(0,0))
+    if zeros2 == len(roots):
+        return [complex(1,0)] + [complex(0,0)]*(zeros2) 
     zeros = roots.count(float('Inf'))
+    #zeros = roots.count(complex(0,0))+roots.count(float('Inf'))
     roots = [root for root in roots if root != float('Inf')]
-    s = sympy.symbols("s")
-    polynomial = sympy.Poly(functools.reduce(lambda a, b: a*b, [s-root for root in roots]), domain="CC")
-    return [complex(0,0)]*zeros + [complex(c) for c in polynomial.coeffs()]
+    if len(roots) == 0:
+        return [complex(0,0)]*zeros + [complex(1,0)]
+    else:
+        s = sympy.symbols("s")
+        polynomial = sympy.Poly(functools.reduce(lambda a, b: a*b, [s-root for root in roots]), domain="CC")
+        if zeros2 > 0:
+        #    return [complex(1,0)] + [complex(0,0)]*zeros + [complex(0,0)]*(len(roots))
+           #if zeros2 > 1:
+            return [complex(0,0)]*(zeros) + [complex(c) for c in polynomial.coeffs()] + [complex(0,0)]*(zeros2) 
+            #else:
+            #    return [complex(c) for c in polynomial.coeffs()] ++ [complex(0,0)]*(zeros)
+        else:
+            return [complex(0,0)]*(zeros) + [complex(c) for c in polynomial.coeffs()]
+
+        #print("UU"+ str(zeros2))
+        #if 
+
 
 def polynomial_C(polynomial):
     zeros = 0
@@ -100,7 +123,18 @@ def polynomial_C(polynomial):
             roots = [float('Inf') for i in range(len(polynomial)-zeros)]
     return poles+roots
 
+
+if __name__ == "__main__":
+    poly = C_polynomial([float('Inf')])
+    print(poly)
+
+
 def C_v(roots):
+    #print("{")
+    #print(roots)
+   # print(C_polynomial(roots))
+    #print(polynomial_v(C_polynomial(roots)))
+    #print("}")
     return polynomial_v(C_polynomial(roots))
 
 def v_C(v):
@@ -118,19 +152,198 @@ def q_SurfaceXYZ(q):
 def SurfaceXYZ_q(XYZ):
     return qt.Qobj(SurfaceXYZ_v(XYZ)).unit()
 
+##################################################################################################################
+
+def q_qubits(state):
+    xyzs = q_SurfaceXYZ(state)
+    #print(xyzs)
+    return [SurfaceXYZ_q([xyz]) for xyz in xyzs]
+
+def qubits_q(qubits):
+    return SurfaceXYZ_q([q_SurfaceXYZ(qubit)[0] for qubit in qubits])
+
+def symmeterize(pieces):
+    if (len(pieces)) == 1:
+        return pieces[0]
+    n = len(pieces)
+    normalization = 1./math.factorial(n)
+    permutations = list(itertools.permutations(pieces, n))
+    perm_states = []
+    for permutation in permutations:
+        perm_state = permutation[0]
+        for state in permutation[1:]:
+            perm_state = qt.tensor(perm_state, state)
+        perm_state.dims = [[perm_state.shape[0]],[1]]
+        perm_states.append(perm_state)
+    tensor_sum = sum(perm_states)
+    return normalization*tensor_sum
+
+def dicke_states(n):
+    states = []
+    for k in range(n+1):
+        pieces = [qt.basis(2, 0) for i in range(n-k)]
+        pieces.extend([qt.basis(2,1) for i in range(k)])
+        #print("dicke")
+        #print("pieces")
+        #print(pieces)
+        dicke = math.sqrt(math.factorial(n)/(math.factorial(n-k)*math.factorial(k)))*symmeterize(pieces)
+        states.append(dicke)
+        #print(dicke)
+    return states
+
+def unsymmeterize(state, use_dickes=None):
+    n = state.shape[0]
+    d = int(math.log(n, 2))
+    dickes = dicke_states(d) if use_dickes == None else use_dickes
+    amps = [state.overlap(dicke) for dicke in dickes]
+    return qt.Qobj(np.conjugate(np.array(amps))).unit()
 
 ##################################################################################################################
-if __name__ == '__main__':
-    qubit = qt.rand_ket(2)
-    xyz = q_SurfaceXYZ(qubit)
-    new_qubit = SurfaceXYZ_q(xyz)
-    xyz2 = q_SurfaceXYZ(new_qubit)
 
-    v = qubit.full().T[0]
-    polynomial = v_polynomial(v)
-    v2 = polynomial_v(polynomial)
+def mink_hermitianPoint(mink):
+    #print(mink)
+    t, x, y, z = mink.tolist()
+    return (t*qt.identity(2) + x*qt.sigmax() + y*qt.sigmay() + z*qt.sigmaz()).unit()
 
-    C = polynomial_C2(polynomial) 
-    poly2 = C_polynomial2(C)
+def hermitianPoint_mink(point):
+    return np.array([0.5*qt.expect(qt.identity(2), point),\
+            0.5*qt.expect(qt.sigmax(), point),\
+            0.5*qt.expect(qt.sigmay(), point),\
+            0.5*qt.expect(qt.sigmaz(), point)])
+
+def mink_hermitianPoint_ndim(mink, n):
+    t, x, y, z = mink.tolist()
+    j = dim_spin(n) 
+    return (t*qt.identity(n) + x*qt.jmat(j, "x") + y*qt.jmat(j, "y") + z*qt.jmat(j, "z")).unit()
+
+def hermitianPoint_mink_ndim(point, n):
+    j = dim_spin(n) 
+    return [qt.expect(qt.identity(n), point),\
+            qt.expect(qt.jmat(j, "x"), point),\
+            qt.expect(qt.jmat(j, "y"), point),\
+            qt.expect(qt.jmat(j, "z"), point)]
+
+def qubit_mink(qubit):
+    a, b = qubit.full().T[0].tolist()
+    return np.array([(a*np.conjugate(a) + b*np.conjugate(b)).real,\
+            2*(a*np.conjugate(b)).real,\
+            -2*(a*np.conjugate(b)).imag,\
+            (a*np.conjugate(a) - b*np.conjugate(b)).real])
+
+def qubit_hermitianPoint(qubit):
+    return qubit.ptrace(0)
+
+def hermitianPoint_qubit(herm):
+    #if herm.tr() == (herm*herm).tr():
+    xyz = [-1*qt.expect(qt.sigmax(), herm),\
+               qt.expect(qt.sigmay(), herm),\
+               qt.expect(qt.sigmaz(), herm)]
+    return SurfaceXYZ_q([xyz])
+    #else:
+    #    return "Not pure!"
+
+def mink_qubit(mink):
+    herm = mink_hermitianPoint(mink)
+    return hermitianPoint_qubit(herm)
+
+# 2x2
+def applyMobiusToPoint(mobius, herm):
+    return mobius*herm*mobius.dag()
+
+Kx = np.array([[0,1,0,0], [1,0,0,0], [0,0,0,0], [0,0,0,0]])
+Ky = np.array([[0,0,1,0], [0,0,0,0], [1,0,0,0], [0,0,0,0]])
+Kz = np.array([[0,0,0,1], [0,0,0,0], [0,0,0,0], [1,0,0,0]])
+
+Jx = np.array([[0,0,0,0], [0,0,0,0], [0,0,0,-1], [0,0,1,0]])
+Jy = np.array([[0,0,0,0], [0,0,0,1], [0,0,0,0], [0,-1,0,0]])
+Jz = np.array([[0,0,0,0], [0,0,-1,0], [0,1,0,0], [0,0,0,0]])
+
+def mink_rotate(mink, axis, angle, inverse=False):
+    angle = angle*10
+    op = None
+    if axis == "x":
+        op = scipy.linalg.expm(angle*Jx)
+    elif axis == "y":
+        op = scipy.linalg.expm(angle*Jy)
+    elif axis == "z":
+        op = scipy.linalg.expm(angle*Jz)
+    if inverse:
+        op = np.linalg.inv(op)
+    return np.inner(op,mink)
+
+def mink_boost(mink, axis, rapidity, inverse=False):
+    rapidity = rapidity*10
+    op = None
+    if axis == "x":
+        op = scipy.linalg.expm(-1*rapidity*Kx)
+    elif axis == "y":
+        op = scipy.linalg.expm(-1*rapidity*Ky)
+    elif axis == "z":
+        op = scipy.linalg.expm(-1*rapidity*Kz)
+    if inverse:
+        op = np.linalg.inv(op)
+    return np.inner(op,mink)
+
+def mink_boost_state(state, axis, dt=0.01, inverse=False):
+    qubits = q_qubits(state)
+    minks = [mink_boost(qubit_mink(qubit), axis, dt, inverse=inverse) for qubit in qubits]
+    qubits2 = [mink_qubit(mink) for mink in minks]
+    return qubits_q(qubits2)
+
+def mink_rotate_state(state, axis, dt=0.01, inverse=False):
+    qubits = q_qubits(state)
+    minks = [mink_rotate(qubit_mink(qubit), axis, dt, inverse=inverse) for qubit in qubits]
+    qubits2 = [mink_qubit(mink) for mink in minks]
+    return qubits_q(qubits2)
+
+##################################################################################################################
+
+
+
+if __name__ == '__main2__':
+    herm = qt.rand_herm(2)
+    mink = hermitianPoint_mink(herm)
+    herm2 = mink_hermitianPoint(mink)
+
+    aqubit = qt.rand_ket(2)
+    amink = qubit_mink(aqubit)
+    aherm = mink_hermitianPoint(amink)
+    aherm2 = qubit_hermitianPoint(aqubit)
+    aqubit2 = hermitianPoint_qubit(aherm)
+    amink2 = qubit_mink(aqubit2)
+
+if __name__ == '__another__':
+    n = 4
+    state = qt.rand_ket(n)
+    print("state")
+    print(state)
+    qubits = q_qubits(state)
+    print("qubits")
+    print(qubits)
+    state2 = qubits_q(qubits)
+    #print("back to state")
+    #print(state2)
+    #print(q_qubits(state2))
+    sym = symmeterize(qubits)
+    print("symmeterized")
+    print(sym)
+    state2 = unsymmeterize(sym)
+    print("back to state")
+    print(state2)
+    qubits2 = q_qubits(state2)
+    print("back to qubits")
+    print(qubits2)
+
+    #qubit = qt.rand_ket(2)
+    #xyz = q_SurfaceXYZ(qubit)
+    #new_qubit = SurfaceXYZ_q(xyz)
+    #xyz2 = q_SurfaceXYZ(new_qubit)
+
+    #v = qubit.full().T[0]
+    #polynomial = v_polynomial(v)
+    #v2 = polynomial_v(polynomial)
+
+    #C = polynomial_C2(polynomial) 
+    #poly2 = C_polynomial2(C)
 
 

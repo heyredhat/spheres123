@@ -127,7 +127,7 @@ spheresSocket.on("collapsed", function(socketData) {
 	//spheresSocket.emit("stop");
 	//alert(socketData["message"]);
 	//console.log(socketData["message"]);
-	document.getElementById("last_collapse").innerHTML = "last collapse: " + socketData["message"];
+	document.getElementById("last_collapse").innerHTML = JSON.parse(socketData)["message"];
 	//spheresSocket.emit("start");
 });
 

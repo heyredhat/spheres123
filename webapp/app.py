@@ -65,58 +65,112 @@ def root():
         thread = sio.start_background_task(animate)
     return render_template("spheres.html")
 
+mink = 0
 unitary_component = True
+to_measure = "sphere"
 #@app.route("/keypress/")
 @sio.on("keypress")
 def key_press(sid, data):
+    global mink
     global unitary_component
     global sphere
+    global to_measure
     #keyCode = int(request.args.get('keyCode'))
     keyCode = int(data["keyCode"])
     #stuff = {'success':True, 'collapsed':False}
     #print(keyCode)
+
+    #print(keyCode)
     if (keyCode == 97):
-        if selected.startswith("star"):
-            sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=True)
-        elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=True, unitary=unitary_component)
+        if to_measure != "sphere":
+            sphere.boson_rotate("x", to_measure, dt=sphere.dt, inverse=True)
         else:
-            sphere.rotate("x", inverse=True)
-    elif (keyCode == 100):            
-        if selected.startswith("star"):
-            sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=False)
-        elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=False, unitary=unitary_component)
-        else:
-            sphere.rotate("x", inverse=False)
+            if mink == 0:
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=True)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=True, unitary=unitary_component)
+                else:
+                    sphere.rotate("x", inverse=True)
+            #elif mink == 2:
+            #    sphere.mink_rotate("x", sphere.dt, inverse=True)
+            elif mink == 1:
+                sphere.boost("x", sphere.dt, inverse=True)
+    elif (keyCode == 100):  
+        if to_measure != "sphere":
+            sphere.boson_rotate("x", to_measure, dt=sphere.dt, inverse=False)
+        else:     
+            if mink == 0:     
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=False)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=False, unitary=unitary_component)
+                else:
+                    sphere.rotate("x", inverse=False)
+            #elif mink == 2:
+            #    sphere.mink_rotate("x", sphere.dt, inverse=False)
+            elif mink == 1:
+                sphere.boost("x", sphere.dt, inverse=False)
     elif (keyCode == 115):
-        if selected.startswith("star"):
-            sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=True)
-        elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=True, unitary=unitary_component)
+        if to_measure != "sphere":
+            sphere.boson_rotate("y", to_measure, dt=sphere.dt, inverse=True)
         else:
-            sphere.rotate("y", inverse=True)
+            if mink == 0:
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=True)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=True, unitary=unitary_component)
+                else:
+                    sphere.rotate("y", inverse=True)
+            #elif mink == 2:
+            #    sphere.mink_rotate("y", sphere.dt, inverse=True)
+            elif mink == 1:
+                sphere.boost("y", sphere.dt, inverse=True)
     elif (keyCode == 119):
-        if selected.startswith("star"):
-            sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=False)
-        elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=False, unitary=unitary_component)
+        if to_measure != "sphere":
+            sphere.boson_rotate("y", to_measure, dt=sphere.dt, inverse=False)
         else:
-            sphere.rotate("y", inverse=False)
+            if mink == 0:
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=False)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=False, unitary=unitary_component)
+                else:
+                    sphere.rotate("y", inverse=False)
+            #elif mink == 2:
+            #    sphere.mink_rotate("y", sphere.dt, inverse=False)
+            elif mink == 1:
+                sphere.boost("y", sphere.dt, inverse=False)
     elif (keyCode == 122):
-        if selected.startswith("star"):
-            sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=True)
-        elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=True, unitary=unitary_component)
+        if to_measure != "sphere":
+            sphere.boson_rotate("z", to_measure, dt=sphere.dt, inverse=True)
         else:
-            sphere.rotate("z", inverse=True)
+            if mink == 0:
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=True)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=True, unitary=unitary_component)
+                else:
+                    sphere.rotate("z", inverse=True)
+            #elif mink == 2:
+            #    sphere.mink_rotate("z", sphere.dt, inverse=True)
+            elif mink == 1:
+                sphere.boost("z", sphere.dt, inverse=True)
     elif (keyCode == 120):
-        if selected.startswith("star"):
-            sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=False)
-        elif selected.startswith("component"):
-            sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=False, unitary=unitary_component)
+        if to_measure != "sphere":
+            sphere.boson_rotate("z", to_measure, dt=sphere.dt, inverse=False)
         else:
-            sphere.rotate("z", inverse=False)
+            if mink == 0:
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=False)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=False, unitary=unitary_component)
+                else:
+                    sphere.rotate("z", inverse=False)
+            #elif mink == 2:
+            #    sphere.mink_rotate("z", sphere.dt, inverse=False)
+            elif mink == 1:
+                sphere.boost("z", sphere.dt, inverse=False)
     elif (keyCode == 48): # 0
         unitary_component = False if unitary_component else True
     elif (keyCode == 117):
@@ -139,47 +193,85 @@ def key_press(sid, data):
         sphere.show_husimi = False if sphere.show_husimi else True
     elif (keyCode == 113):
         sphere.destroy_star()
+        to_measure = "sphere"
     elif (keyCode == 101):
         sphere.create_star()
+        to_measure = "sphere"
     elif (keyCode == 46):
         sphere.show_controls = False if sphere.show_controls else True
     elif (keyCode == 49):
-        #running = False
-        pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
-        #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", json.dumps({"message": message}))
-        #stuff["pick"] = message
-        #stuff["collapsed"] = True
-    elif (keyCode == 50):
-        #running = False
-        pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
-        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", json.dumps({"message": message}))
-        #stuff["pick"] = message
-        #stuff["collapsed"] = True
-    elif (keyCode == 51):
-        #running = False
-        pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
-        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", json.dumps({"message": message}))
-        #stuff["pick"] = message
-        #stuff["collapsed"] = True
-    elif (keyCode == 52):
-        if sphere.energy != None:
+        if to_measure == "sphere":
             #running = False
-            pick, L, probabilities = sphere.collapse(sphere.energy)
-            message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
+            #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            message = "last collapse: %.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
             #stuff["pick"] = message
             #stuff["collapsed"] = True
+        else:
+            sphere.boson_collapse("x", to_measure)
+            message = "boson %d collapse!" % (to_measure)
+            sio.emit("collapsed", json.dumps({"message": message}))
+    elif (keyCode == 50):
+        if to_measure == "sphere":
+            #running = False
+            pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
+            message = "last collapse: %.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
+            #stuff["pick"] = message
+            #stuff["collapsed"] = True
+        else:
+            sphere.boson_collapse("y", to_measure)
+            message = "boson %d collapse!" % (to_measure)
+            sio.emit("collapsed", json.dumps({"message": message}))
+    elif (keyCode == 51):
+        if to_measure == "sphere":
+            #running = False
+            pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
+            message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("last collapse: collapsed", json.dumps({"message": message}))
+            #stuff["pick"] = message
+            #stuff["collapsed"] = True
+        else:
+            sphere.boson_collapse("z", to_measure)
+            message = "boson %d collapse!" % (to_measure)
+            sio.emit("collapsed", json.dumps({"message": message}))
+    elif (keyCode == 52):
+        if to_measure == "sphere":
+            if sphere.energy != None:
+                #running = False
+                pick, L, probabilities = sphere.collapse(sphere.energy)
+                message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+                sio.emit("last collapse: collapsed", json.dumps({"message": message}))
+                #stuff["pick"] = message
+                #stuff["collapsed"] = True
     elif (keyCode == 53):
-        #running = False
-        pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
-        message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-        sio.emit("collapsed", json.dumps({"message": message}))
-        #stuff["pick"] = message
-        #stuff["collapsed"] = True
+        if to_measure == "sphere":
+            #running = False
+            pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
+            message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("last collapse: collapsed", json.dumps({"message": message}))
+            #stuff["pick"] = message
+            #stuff["collapsed"] = True
+        else:
+            sphere.boson_collapse("r", to_measure)
+            message = "boson %d collapse!" % (to_measure)
+            sio.emit("collapsed", json.dumps({"message": message}))
+    elif (keyCode == 109): # m
+        mink += 1
+        if mink > 1:
+            mink = 0
+    elif (keyCode == 110): # n
+        if to_measure == "sphere":
+            to_measure = 0
+        else:
+            to_measure += 1
+            if to_measure >= sphere.n()-1:
+                to_measure = "sphere"
+        if to_measure == "sphere":
+            sio.emit("collapsed", json.dumps({"message": "%s selected for measurement/rotation" % (str(to_measure))}))        
+        else: 
+            sio.emit("collapsed", json.dumps({"message": "boson %s selected for measurement/rotation" % (str(to_measure))}))        
     #return json.dumps(stuff), 200, {'ContentType':'application/json'} 
 
 @sio.on("start")

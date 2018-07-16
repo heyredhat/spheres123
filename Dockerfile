@@ -12,6 +12,7 @@ WORKDIR /opt/webapp
 
 RUN conda install sympy
 RUN conda install gevent
+RUN conda install matplotlib
 RUN conda install -c conda-forge qutip 
 
 CMD gunicorn --bind 0.0.0.0:$PORT wsgi
