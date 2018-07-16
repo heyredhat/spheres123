@@ -78,7 +78,6 @@ def dim_set(sid, data):
     global sphere
     if data["dims"].strip() == "":
         sphere.dimensionality = None
-        sio.emit("new_dist_ctrls", {"new_dist_ctrls": "n is %d" % sphere.n()})
     else:
         dims = [int(d.strip()) for d in data["dims"].split(",")]
         if np.prod(np.array(dims)) == sphere.n():
