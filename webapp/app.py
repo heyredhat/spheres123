@@ -73,9 +73,13 @@ def root():
         thread = sio.start_background_task(animate)
     return render_template("spheres.html")
 
+dist_selected = "sphere"
+
 @sio.on("dim_set")
 def dim_set(sid, data):
     global sphere
+    global dist_selected
+    dist_selected = "sphere"
     if data["dims"].strip() == "":
         sphere.dimensionality = None
         sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
@@ -95,7 +99,7 @@ def dim_set(sid, data):
         except:
             pass
 
-dist_selected = "sphere"
+
 
 @sio.on("dim_choice")
 def dim_choice(sid, data):
@@ -255,10 +259,12 @@ def key_press(sid, data):
         sphere.destroy_star()
         sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
         to_measure = "sphere"
+        dist_selected = "sphere"
     elif (keyCode == 101):
         sphere.create_star()
         to_measure = "sphere"
         sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
+        dist_selected = "sphere"
     elif (keyCode == 46):
         sphere.show_controls = False if sphere.show_controls else True
     elif (keyCode == 49):
