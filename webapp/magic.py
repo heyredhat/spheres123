@@ -345,11 +345,6 @@ def apply_mobius(state, mobius):
 def mobius_connection(three_stars_now, three_stars_later):
     abc = [xyz_c(xyz) for xyz in three_stars_now]
     xyz = [xyz_c(xyz) for xyz in three_stars_later]
-
-
-    # If one of the points zi or wi is ∞, 
-    #then we first divide all four determinants by this variable 
-    #and then take the limit as the variable approaches ∞.
     
     A = np.array([["ax", "x", 1],
                   ["by", "y", 1],
