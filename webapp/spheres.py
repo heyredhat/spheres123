@@ -402,13 +402,15 @@ class Sphere:
         if self.dimensionality != None:
             j = dim_spin(self.dimensionality[i])
             op = qt.jmat(j, direction)
-            total_op = op if i == 0 else qt.identity(self.dimensionality[i])
+            total_op = op if i == 0 else qt.identity(self.dimensionality[0])
             for j in range(1, len(self.dimensionality)):
                 if j == i:
                     total_op = qt.tensor(total_op, op)
                 else:
                     total_op = qt.tensor(total_op, qt.identity(self.dimensionality[j]))
+            #print(self.state)
             total_op.dims = [[self.n()], [self.n()]]
+            #print(total_op)
             self.state = evolver(self.state, total_op, dt=dt, inverse=inverse)
 
     def measure_distinguishable_piece(self, i, direction):
@@ -419,7 +421,7 @@ class Sphere:
                 op = qt.jmat(j, direction)
             elif direction == "r":
                 op = qt.rand_herm(self.dimensionality[i])
-            total_op = op if i == 0 else qt.identity(self.dimensionality[i])
+            total_op = op if i == 0 else qt.identity(self.dimensionality[0])
             for j in range(1, len(self.dimensionality)):
                 if j == i:
                     total_op = qt.tensor(total_op, op)
