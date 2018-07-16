@@ -80,17 +80,20 @@ def dim_set(sid, data):
         sphere.dimensionality = None
         sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
     else:
-        dims = [int(d.strip()) for d in data["dims"].split(",")]
-        if np.prod(np.array(dims)) == sphere.n():
-            sphere.dimensionality = dims
-        ctrls = "<div id='dist_ctrls_form'>"
-        i = 0
-        ctrls += "<input type='radio' name='dist_selected' value='-1'>sphere<br>"
-        for d in sphere.dimensionality:
-            ctrls += "<input type='radio' name='dist_selected' value='%d'>%d<br>" % (i, d)
-            i += 1
-        ctrls += "</form>"
-        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ctrls})
+        try:
+            dims = [int(d.strip()) for d in data["dims"].split(",")]
+            if np.prod(np.array(dims)) == sphere.n() and dims.count(1) == 0:
+                sphere.dimensionality = dims
+                ctrls = "<div id='dist_ctrls_form'>"
+                i = 0
+                ctrls += "<input type='radio' name='dist_selected' value='-1'>sphere<br>"
+                for d in sphere.dimensionality:
+                    ctrls += "<input type='radio' name='dist_selected' value='%d'>%d<br>" % (i, d)
+                    i += 1
+                ctrls += "</form>"
+                sio.emit("new_dist_ctrls", {"new_dist_ctrls": ctrls})
+        except:
+            pass
 
 dist_selected = "sphere"
 
@@ -250,10 +253,12 @@ def key_press(sid, data):
         sphere.show_husimi = False if sphere.show_husimi else True
     elif (keyCode == 113):
         sphere.destroy_star()
+        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
         to_measure = "sphere"
     elif (keyCode == 101):
         sphere.create_star()
         to_measure = "sphere"
+        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
     elif (keyCode == 46):
         sphere.show_controls = False if sphere.show_controls else True
     elif (keyCode == 49):
