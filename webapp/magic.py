@@ -124,9 +124,6 @@ def polynomial_C(polynomial):
     return poles+roots
 
 
-if __name__ == "__main__":
-    poly = C_polynomial([float('Inf')])
-    print(poly)
 
 
 def C_v(roots):
@@ -298,7 +295,187 @@ def mink_rotate_state(state, axis, dt=0.01, inverse=False):
 
 ##################################################################################################################
 
+def separable(whole, dims, piece_index):
+    whole_copy = whole.copy()
+    whole_copy.dims = [[dims],[1]*len(dims)]
+    reduction = whole_copy.ptrace(piece_index)
+    entropy = qt.entropy_vn(reduction) 
+    if entropy < 0.000001 and entropy > -0.999999:
+        return False
+    else:
+        return True
 
+def fuzzy(a, b):
+    if a-b < 0.000001 and a-b > -0.999999:
+        return True
+    else:
+        return False
+
+def density_to_purevec(density):
+    entropy = qt.entropy_vn(density) 
+    if fuzzy(entropy, 0):
+        U, S, V = np.linalg.svd(density.full())
+        #print("{")
+        #print(U)
+        #print(S)
+        #print(V)
+        #print("}")
+        s = S.tolist()
+        for i in range(len(s)):
+            if fuzzy(s[i], 1):
+                return qt.Qobj(np.conjugate(V[i]))
+
+#if __name__ == "__main__":
+#    pass
+    #a = qt.rand_ket(2)
+    #b = a.ptrace(0)
+    #c = density_to_purevec(b)
+
+##################################################################################################################
+
+def apply_mobius(state, mobius):
+    points = [qubit_hermitianPoint(qubit) for qubit in q_qubits(state)]
+    print("{")
+    print(points)
+    mob = qt.Qobj(mobius)
+    points = [mob.dag()*point*mob for point in points]
+    print(points)
+    return qubits_q([hermitianPoint_qubit(point) for point in points])
+
+def mobius_connection(three_stars_now, three_stars_later):
+    abc = [xyz_c(xyz) for xyz in three_stars_now]
+    xyz = [xyz_c(xyz) for xyz in three_stars_later]
+
+
+    # If one of the points zi or wi is ∞, 
+    #then we first divide all four determinants by this variable 
+    #and then take the limit as the variable approaches ∞.
+    
+    A = np.array([["ax", "x", 1],
+                  ["by", "y", 1],
+                  ["cz", "z", 1]])
+    A_ = np.array([[0, 0, 1],
+                  [0, 0, 1],
+                  [0, 0, 1]], dtype=np.complex128)
+    B = np.array([["ax", "a", "x"],
+                  ["by", "b", "y"],
+                  ["cz", "x", "z"]])
+    B_ = np.array([[0, 0, 0],
+                  [0, 0, 0],
+                  [0, 0, 0]], dtype=np.complex128)
+    C = np.array([["a", "x", 1],
+                  ["b", "y", 1],
+                  ["c", "z", 1]])
+    C_ = np.array([[0, 0, 1],
+                  [0, 0, 1],
+                  [0, 0, 1]], dtype=np.complex128)
+    D = np.array([["ax", "a", 1],
+                  ["by", "b", 1],
+                  ["cz", "c", 1]])
+    D_ = np.array([[0, 0, 1],
+                  [0, 0, 1],
+                  [0, 0, 1]], dtype=np.complex128)
+
+    ABC = ["a", "b", "c"]
+    XYZ = ["x", "y", "z"]
+    GUYS = [A, B, C, D]
+    GUYS_ = [A_, B_, C_, D_]
+
+    for m in range(3):
+        if abc[m] == float('inf'):
+            for i in range(3):
+                for j in range(3):
+                    for k in range(4):
+                        if isinstance(GUYS[k][i][j], str):
+                            if GUYS[k][i][j].contains(ABC[m]):
+                                GUYS[k][i][j].remove(ABC[m])
+                            else:
+                                GUYS[k][i][j] = '0'
+        if xyz[m] == float('inf'):
+            for i in range(3):
+                for j in range(3):
+                    for k in range(4):
+                        if isinstance(GUYS[k][i][j], str):
+                            if GUYS[k][i][j].contains(XYZ[m]):
+                                GUYS[k][i][j].remove(XYZ[m])
+                            else:
+                                GUYS[k][i][j] = '0'
+
+    for i in range(3):
+        for j in range(3):
+            for k in range(4):
+                if isinstance(GUYS[k][i][j], str):
+                    if len(GUYS[k][i][j]) == 1:
+                        if GUYS[k][i][j] == '0':
+                            GUYS_[k][i][j] = 0
+                        elif GUYS[k][i][j] in ABC:
+                            GUYS_[k][i][j] = abc[ABC.index(GUYS[k][i][j])]
+                        elif GUYS[k][i][j] in XYZ:
+                            GUYS_[k][i][j] = xyz[XYZ.index(GUYS[k][i][j])]
+                    else:
+                       # print(GUYS[k][i][j])
+                        one, two = GUYS[k][i][j][0], GUYS[k][i][j][1]
+                        if one in ABC:
+                            one = abc[ABC.index(one)]
+                        elif one in XYZ:
+                            one = xyz[XYZ.index(one)]
+                        if two in ABC:
+                            two = abc[ABC.index(two)]
+                        elif two in XYZ:
+                            two = xyz[XYZ.index(two)]
+                        GUYS_[k][i][j] = one*two
+
+    #print(GUYS_[0])
+
+    AA = np.linalg.det(GUYS_[0])
+    BB = np.linalg.det(GUYS_[1])
+    CC = np.linalg.det(GUYS_[2])
+    DD = np.linalg.det(GUYS_[3])
+    return np.array([[AA, BB], [CC, DD]])    
+
+if __name__ == "__main__":
+    stateA = qt.rand_ket(4)
+    stateB = qt.rand_ket(4)
+    stateAstars = q_SurfaceXYZ(stateA)
+    stateBstars = q_SurfaceXYZ(stateB)
+    mob = mobius_connection(stateAstars, stateBstars)
+    Atransformed = apply_mobius(stateA, mob)
+    AtransformedStars = q_SurfaceXYZ(Atransformed)
+
+def mobius_connected(skyA, skyB):
+    pass
+
+def mobius_for_collapse():
+    pass
+
+def decompose_mobius_rot_boost():
+    pass
+
+
+
+def iterate_majorana():
+    pass
+
+##################################################################################################################
+
+def factors(n):    
+    return set(functools.reduce(list.__add__, 
+                ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)))
+
+def prime_factors(n):
+    i = 2
+    factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+    if n > 1:
+        factors.append(n)
+    return factors
+
+##################################################################################################################
 
 if __name__ == '__main2__':
     herm = qt.rand_herm(2)

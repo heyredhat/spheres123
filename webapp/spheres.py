@@ -32,6 +32,8 @@ class Sphere:
         self.precalc_coherents = None
         self.dim_change = False
 
+        self.dimensionality = None
+
     def n(self):
         return self.state.shape[0]
 
@@ -177,6 +179,7 @@ class Sphere:
         self.paulis(reset=True)
         self.eigenenergies(reset=True)
         self.dim_change = True
+        self.dimensionality = None
 
     def destroy_star(self):
         if self.n() > 2:
@@ -185,7 +188,7 @@ class Sphere:
             self.hermitian_bases(reset=True)
             self.paulis(reset=True)
             self.eigenenergies(reset=True)
-            self.dim_change = True
+            self.dimensionality = None
 
     def pretty_state(self):
         vec = self.state.full().T[0]
@@ -371,3 +374,62 @@ class Sphere:
         #print("collapsed!")
         return pick, L, probabilities
 
+    def distinguishable_pieces(self):
+        if self.dimensionality != None:
+            state_copy = self.state.copy()
+            state_copy.dims = [self.dimensionality, [1]*len(self.dimensionality)]
+            pieces = [state_copy.ptrace(i) for i in range(len(self.dimensionality))]
+            return pieces
+        else:
+            return self.state.ptrace(0)
+
+    def are_separable(self, pieces):
+        return [separable(piece) for piece in pieces]
+
+    def dist_pieces_spin(self, pieces):
+        arrows = []
+        for piece in pieces:
+            j = dim_spin(piece.shape[0]) 
+            direction = np.array([qt.expect(qt.jmat(j, "x"), piece).real,\
+                                  -1*qt.expect(qt.jmat(j, "y"), piece).real,\
+                                  -1*qt.expect(qt.jmat(j, "z"), piece).real])
+            spin_squared = np.sqrt(np.sum(direction**2))
+            arrows.append([normalize(direction).tolist(), spin_squared])
+        #print(arrows)
+        return arrows
+
+    def rotate_distinguishable_piece(self, i, direction, dt=0.01, inverse=False):
+        if self.dimensionality != None:
+            j = dim_spin(self.dimensionality[i])
+            op = qt.jmat(j, direction)
+            total_op = op if i == 0 else qt.identity(self.dimensionality[i])
+            for j in range(1, len(self.dimensionality)):
+                if j == i:
+                    total_op = qt.tensor(total_op, op)
+                else:
+                    total_op = qt.tensor(total_op, qt.identity(self.dimensionality[j]))
+            total_op.dims = [[self.n()], [self.n()]]
+            self.state = evolver(self.state, total_op, dt=dt, inverse=inverse)
+
+    def measure_distinguishable_piece(self, i, direction):
+        if self.dimensionality != None:
+            j = dim_spin(self.dimensionality[i])
+            op = None
+            if direction == "x" or direction == "y" or direction == "z":
+                op = qt.jmat(j, direction)
+            elif direction == "r":
+                op = qt.rand_herm(self.dimensionality[i])
+            total_op = op if i == 0 else qt.identity(self.dimensionality[i])
+            for j in range(1, len(self.dimensionality)):
+                if j == i:
+                    total_op = qt.tensor(total_op, op)
+                else:
+                    total_op = qt.tensor(total_op, qt.identity(self.dimensionality[j]))
+            total_op.dims = [[self.n()], [self.n()]]
+            L, V = total_op.eigenstates()
+            amplitudes = [self.state.overlap(v) for v in V]
+            probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
+            probabilities = probabilities/probabilities.sum()
+            pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
+            projector = V[pick].ptrace(0)
+            self.state = (projector*self.state).unit()

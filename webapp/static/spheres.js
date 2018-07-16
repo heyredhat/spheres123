@@ -20,7 +20,8 @@ scene.add(light);
 var sphere_geometry = new THREE.SphereGeometry(1, 32, 32);
 var sphere_material = new THREE.MeshPhongMaterial({color: 0x0000ff,  transparent: true});
 var sphere = new THREE.Mesh(sphere_geometry, sphere_material);
-sphere_material.opacity = 0.7;
+sphere_material.opacity = 0.5;
+//sphere_material.side = THREE.DoubleSide;
 scene.add(sphere);
 
 var up_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xffff00, 0.1);
@@ -48,6 +49,9 @@ var component_plane_arrows = [];
 
 var husimi_pts = false;
 
+var piece_arrows = [];
+var piece_spheres = [];
+
 /************************************************************************************************************/
 
 var raycaster = new THREE.Raycaster();
@@ -56,7 +60,7 @@ var selected = "sphere";
 
 document.addEventListener( 'mousedown', 
 	function ( event ) {
-		event.preventDefault();
+		//event.preventDefault();
 		mouse.x = ( event.clientX / renderer.domElement.clientWidth ) * 2 - 1;
 		mouse.y = - ( event.clientY / renderer.domElement.clientHeight ) * 2 + 1;
 		raycaster.setFromCamera( mouse, camera );
@@ -131,6 +135,19 @@ spheresSocket.on("collapsed", function(socketData) {
 	//spheresSocket.emit("start");
 });
 
+spheresSocket.on("new_dist_ctrls", function(socketData) {
+	document.getElementById("density_selector").innerHTML = socketData["new_dist_ctrls"];
+});
+
+function set_dims() {
+	spheresSocket.emit("dim_set", {"dims": document.getElementById("dims").value});
+}
+
+function set_density_selected() {
+	spheresSocket.emit("dim_choice", {"choice": document.querySelector('input[name = "dist_selected"]:checked').value});
+}
+
+
 /************************************************************************************************************/
 
 document.addEventListener("keypress", function (event) {
@@ -182,6 +199,45 @@ function render (response) {
 	var new_component_plane_stars = response["plane_component_stars"];
 	var new_husimi = response["husimi"];
 	var new_controls = response["controls"];
+	var new_piece_arrows = response["piece_arrows"];
+
+	//console.log(new_piece_arrows);
+
+	if (new_piece_arrows.length == piece_arrows.length) {
+		for(i = 0; i < piece_arrows.length; ++i) {
+			axis = new THREE.Vector3(new_piece_arrows[i][0][0], new_piece_arrows[i][0][1], new_piece_arrows[i][0][2])
+			length = new_piece_arrows[i][1];
+
+			piece_arrows[i].setDirection(axis);
+			piece_arrows[i].setLength(length);
+
+			piece_spheres[i].position.set(length*axis.x, length*axis.y, length*axis.z);
+		}
+	} else {
+		for(i = 0; i < piece_arrows.length; ++i) {
+			scene.remove(piece_arrows[i]);
+			scene.remove(piece_spheres[i]);
+		}
+		piece_arrows = [];
+		piece_spheres = [];
+		for(i = 0; i < new_piece_arrows.length; ++i) {
+			axis = new THREE.Vector3(new_piece_arrows[i][0][0], new_piece_arrows[i][0][1], new_piece_arrows[i][0][2])
+			length = new_piece_arrows[i][1];
+			color = Math.random() * 0xffffff
+			var arrow = new THREE.ArrowHelper(axis, new THREE.Vector3(0, 0, 0), length, color);
+			piece_arrows.push(arrow);
+			scene.add(arrow);
+
+
+			var density_geometry = new THREE.SphereGeometry(0.1, 32, 32);
+			var density_material = new THREE.MeshPhongMaterial({color: color});
+			var density = new THREE.Mesh(density_geometry, density_material);
+			density.position.set(length*axis.x, length*axis.y, length*axis.z);
+			piece_spheres.push(density);
+			scene.add(density);
+			//console.log(piece_spheres);
+		}
+	}
 
 	// Update spin axis arrow
 	spin_axis_arrow.setDirection(new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], new_spin_axis[0][2]));
@@ -204,7 +260,7 @@ function render (response) {
 		for(i = 0; i < stars.length; ++i) {
 			scene.remove(stars[i]);
 		}
-		stars = []
+		stars = [];
 		for(i = 0; i < new_stars.length; ++i) {
 			var star_geometry = new THREE.SphereGeometry(0.1, 32, 32);
 			var star_material = new THREE.MeshPhongMaterial({color: 0xffffff});
