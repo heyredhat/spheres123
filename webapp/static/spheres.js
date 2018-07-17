@@ -124,11 +124,11 @@ var spheresSocket = io.connect(null, {port: location.port, rememberTransport: fa
 spheresSocket.on("animate", function(socketData) {
 	spheresSocket.emit("selected", {"selected": selected});
 	render(JSON.parse(socketData));
-	console.log("animate");
+	//console.log("animate");
 });
 
 spheresSocket.on("collapsed", function(socketData) {
-	console.log("collapsed");
+	//console.log("collapsed");
 	//stuff = JSON.parse(socketData);
 	//spheresSocket.emit("stop");
 	//alert(socketData["message"]);

@@ -415,9 +415,9 @@ class Sphere:
         if self.dimensionality != None:
             state_copy = self.state.copy()
             state_copy.dims = [self.dimensionality, [1]*len(self.dimensionality)]
-            print("{")
-            print(state_copy)
-            print("}")
+            #print("{")
+           # print(state_copy)
+           # print("}")
             sys.stdout.flush() 
             pieces = [state_copy.ptrace(i) for i in range(len(self.dimensionality))]
             return pieces

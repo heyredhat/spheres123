@@ -307,23 +307,23 @@ def key_press(sid, data):
             sio.emit("collapsed", json.dumps({"message": message}))
         else:
             if to_measure == "sphere":
-                print("collapsing x")
-                sys.stdout.flush() 
+                #print("collapsing x")
+                #sys.stdout.flush() 
                 #running = False
                 pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
-                print("did the function")
-                sys.stdout.flush() 
+                #print("did the function")
+                #sys.stdout.flush() 
 
                 #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
                 message = "last collapse: %.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                print(message)
-                sys.stdout.flush() 
+                #print(message)
+                #sys.stdout.flush() 
 
                 sio.emit("collapsed", json.dumps({"message": message}))
                 #stuff["pick"] = message
                 #stuff["collapsed"] = True
-                print("sent emission")
-                sys.stdout.flush() 
+                #print("sent emission")
+                #sys.stdout.flush() 
             else:
                 sphere.boson_collapse("x", to_measure)
                 message = "boson %d collapse!" % (to_measure)
@@ -406,7 +406,7 @@ def key_press(sid, data):
             sio.emit("collapsed", json.dumps({"message": "%s selected for measurement/rotation" % (str(to_measure))}))        
         else: 
             sio.emit("collapsed", json.dumps({"message": "boson %s selected for measurement/rotation" % (str(to_measure))}))        
-    print("done keycode")
+    #print("done keycode")
     #return json.dumps(stuff), 200, {'ContentType':'application/json'} 
 
 @sio.on("start")
