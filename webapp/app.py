@@ -11,17 +11,32 @@ sphere = Sphere(state=qt.rand_ket(2),\
 
 ##################################################################################################################
 
+import sys
 import os
 import json
 import time
-import gevent
+import eventlet
+#import gevent
+#import eventlet
+#@eventlet.monkey_patch()
+#import gevent
+#import geventwebsocket
+
+#from gevent import monkey
+#monkey.patch_all()
+#from threading import Thread
+
 import logging
 from flask import Flask, request, Response, render_template
+
 import socketio
 
-sio = socketio.Server()
+sio = socketio.Server(async_mode='eventlet')
+
 app = Flask("spheres")
+app.debug = True
 app.wsgi_app = socketio.Middleware(sio, app.wsgi_app)
+
 thread = None
 
 #log = logging.getLogger('werkzeug')
@@ -31,35 +46,44 @@ thread = None
 selected = "sphere";
 distinguishable_selected = "sphere"
 
+
 def animate():
     global sphere
     while True:
-        sphere.update()
-        phase = sphere.phase() if sphere.show_phase else []
-        stuff = sphere.allstars(plane_stars=sphere.show_projection,\
-                                component_stars=sphere.show_components,\
-                                plane_component_stars=sphere.show_projection and sphere.show_components)
-        husimi = sphere.husimi() if sphere.show_husimi else []
-        controls = sphere.controls() if sphere.show_controls else ""
+        try:
+            sphere.update()
+            phase = sphere.phase() if sphere.show_phase else []
+            stuff = sphere.allstars(plane_stars=sphere.show_projection,\
+                                    component_stars=sphere.show_components,\
+                                    plane_component_stars=sphere.show_projection and sphere.show_components)
+            husimi = sphere.husimi() if sphere.show_husimi else []
+            controls = sphere.controls() if sphere.show_controls else ""
 
-        piece_arrows = []
-        if sphere.dimensionality != None:
-            pieces = sphere.distinguishable_pieces()
-            piece_arrows = sphere.dist_pieces_spin(pieces)
+            piece_arrows = []
+            if sphere.dimensionality != None:
+                pieces = sphere.distinguishable_pieces()
+                piece_arrows = sphere.dist_pieces_spin(pieces)
 
-        sioEmitData = json.dumps({"spin_axis" : sphere.spin_axis(),\
-                            "stars" : stuff["stars"],\
-                            "state" : sphere.pretty_state(),\
-                            "dt" : sphere.dt,\
-                            "phase" : phase,\
-                            "component_stars" : stuff["component_stars"],\
-                            "plane_stars" : stuff["plane_stars"],\
-                            "plane_component_stars" : stuff["plane_component_stars"],\
-                            "husimi" : husimi,\
-                            "controls" : controls,\
-                            "piece_arrows": piece_arrows});
-        sio.emit("animate", sioEmitData)
-        sio.sleep(0)
+            data = json.dumps({"spin_axis" : sphere.spin_axis(),\
+                                "stars" : stuff["stars"],\
+                                "state" : sphere.pretty_state(),\
+                                "dt" : sphere.dt,\
+                                "phase" : phase,\
+                                "component_stars" : stuff["component_stars"],\
+                                "plane_stars" : stuff["plane_stars"],\
+                                "plane_component_stars" : stuff["plane_component_stars"],\
+                                "husimi" : husimi,\
+                                "controls" : controls,\
+                                "piece_arrows": piece_arrows});
+            #print("about to sio.emit animate")
+            sio.emit("animate", data)
+            
+            sio.sleep(0.001)
+        except Exception as e:
+            print(e)
+            sys.stdout.flush() 
+
+#gevent.spawn(animate)
 
 @sio.on("selected")
 def select(sid, data):
@@ -72,6 +96,15 @@ def root():
     if thread is None:
         thread = sio.start_background_task(animate)
     return render_template("spheres.html")
+
+@sio.on('connect')
+def connect(sid, environ):
+    print('connect ', sid)
+    
+
+@sio.on('disconnect')
+def disconnect(sid):
+    print('disconnect ', sid)
 
 dist_selected = "sphere"
 
@@ -274,13 +307,23 @@ def key_press(sid, data):
             sio.emit("collapsed", json.dumps({"message": message}))
         else:
             if to_measure == "sphere":
+                print("collapsing x")
+                sys.stdout.flush() 
                 #running = False
                 pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
+                print("did the function")
+                sys.stdout.flush() 
+
                 #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
                 message = "last collapse: %.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+                print(message)
+                sys.stdout.flush() 
+
                 sio.emit("collapsed", json.dumps({"message": message}))
                 #stuff["pick"] = message
                 #stuff["collapsed"] = True
+                print("sent emission")
+                sys.stdout.flush() 
             else:
                 sphere.boson_collapse("x", to_measure)
                 message = "boson %d collapse!" % (to_measure)
@@ -312,7 +355,7 @@ def key_press(sid, data):
                 #running = False
                 pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
                 message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                sio.emit("last collapse: collapsed", json.dumps({"message": message}))
+                sio.emit("collapsed", json.dumps({"message": message}))
                 #stuff["pick"] = message
                 #stuff["collapsed"] = True
             else:
@@ -328,7 +371,7 @@ def key_press(sid, data):
                     #running = False
                     pick, L, probabilities = sphere.collapse(sphere.energy)
                     message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                    sio.emit("last collapse: collapsed", json.dumps({"message": message}))
+                    sio.emit("collapsed", json.dumps({"message": message}))
                     #stuff["pick"] = message
                     #stuff["collapsed"] = True
     elif (keyCode == 53):
@@ -341,7 +384,7 @@ def key_press(sid, data):
                 #running = False
                 pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
                 message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                sio.emit("last collapse: collapsed", json.dumps({"message": message}))
+                sio.emit("collapsed", json.dumps({"message": message}))
                 #stuff["pick"] = message
                 #stuff["collapsed"] = True
             else:
@@ -363,6 +406,7 @@ def key_press(sid, data):
             sio.emit("collapsed", json.dumps({"message": "%s selected for measurement/rotation" % (str(to_measure))}))        
         else: 
             sio.emit("collapsed", json.dumps({"message": "boson %s selected for measurement/rotation" % (str(to_measure))}))        
+    print("done keycode")
     #return json.dumps(stuff), 200, {'ContentType':'application/json'} 
 
 @sio.on("start")

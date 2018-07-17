@@ -1,3 +1,4 @@
+import sys
 import math
 import cmath
 import gellman
@@ -33,6 +34,8 @@ class Sphere:
         self.dim_change = False
 
         self.dimensionality = None
+
+        self.animation_buffer = []
 
     def n(self):
         return self.state.shape[0]
@@ -353,7 +356,10 @@ class Sphere:
         probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
         probabilities = probabilities/probabilities.sum()
         pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        projector = V[pick].ptrace(0)
+
+        vec = V[pick].full().T[0]
+        projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
+
         sym = (projector*sym).unit()
 
         #print("new_sym")
@@ -364,20 +370,55 @@ class Sphere:
        # print(self.state)
 
     def collapse(self, operator):
+        #print("incollapse")
+        sys.stdout.flush() 
         L, V = operator.eigenstates()
+        #print("L,V")
+        #print(L)
+        #print(V)
+        #sys.stdout.flush() 
         amplitudes = [self.state.overlap(v) for v in V]
+        #print("amplitudes")
+        #print(amplitudes)
+        #sys.stdout.flush() 
         probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
+        #print("probabilities")
+        #print(probabilities)
+        #sys.stdout.flush() 
         probabilities = probabilities/probabilities.sum()
+        #print("more probabilities")
+        #print(probabilities)
+        #sys.stdout.flush() 
         pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        projector = V[pick].ptrace(0)
-        self.state = (projector*self.state).unit()
-        #print("collapsed!")
-        return pick, L, probabilities
+        #print("pick")
+        #print(pick)
+        #sys.stdout.flush()
+        #print(V[pick])
+        #sys.stdout.flush()
+        try:
+            vec = V[pick].full().T[0]
+            projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
+            #print("projector")
+            #print(projector)
+            #sys.stdout.flush() 
+            self.state = (projector*self.state).unit()
+            #print("new_state")
+            #print(self.state)
+            #sys.stdout.flush() 
+            #print("collapsed!")
+            return pick, L, probabilities
+        except Exception as e:
+            print(e)
+            sys.stdout.flush() 
 
     def distinguishable_pieces(self):
         if self.dimensionality != None:
             state_copy = self.state.copy()
             state_copy.dims = [self.dimensionality, [1]*len(self.dimensionality)]
+            print("{")
+            print(state_copy)
+            print("}")
+            sys.stdout.flush() 
             pieces = [state_copy.ptrace(i) for i in range(len(self.dimensionality))]
             return pieces
         else:
@@ -433,5 +474,6 @@ class Sphere:
             probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
             probabilities = probabilities/probabilities.sum()
             pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-            projector = V[pick].ptrace(0)
+            vec = V[pick].full().T[0]
+            projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
             self.state = (projector*self.state).unit()
