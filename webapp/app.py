@@ -51,7 +51,19 @@ def animate():
     global sphere
     while True:
         try:
+            #if sphere.animate_collapse and len(sphere.animation_buffer) > 0:
+            #    slices, final_state = sphere.animation_buffer[0]
+            #    if len(slices) == 0:
+            #        sphere.state = final_state
+            #        sphere.animation_buffer.pop(0)
+            #    else:
+            #        next_one = sphere.animation_buffer[0][0].pop(0)
+            #        sphere.state = next_one
+            #    sio.sleep(0.01)
+            #else:
+            #    
             sphere.update()
+
             phase = sphere.phase() if sphere.show_phase else []
             stuff = sphere.allstars(plane_stars=sphere.show_projection,\
                                     component_stars=sphere.show_components,\
@@ -412,6 +424,9 @@ def key_press(sid, data):
             sio.emit("collapsed", json.dumps({"message": "%s selected for measurement/rotation" % (str(to_measure))}))        
         else: 
             sio.emit("collapsed", json.dumps({"message": "boson %s selected for measurement/rotation" % (str(to_measure))}))        
+    #elif (keyCode == 98): 
+    #    sphere.animate_collapse = True if not sphere.animate_collapse else False
+
     #print("done keycode")
     #return json.dumps(stuff), 200, {'ContentType':'application/json'} 
 

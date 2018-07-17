@@ -35,6 +35,7 @@ class Sphere:
 
         self.dimensionality = None
 
+        self.animate_collapse = False
         self.animation_buffer = []
 
     def n(self):
@@ -117,6 +118,8 @@ class Sphere:
         new_component = xyz_c(new_xyz)
         if (new_component != float('Inf')):
             polynomial[index] = new_component
+        else:
+            return self.state
         new_vector = polynomial_v(polynomial)
         if unitary:
             self.state = qt.Qobj(new_vector).unit()
@@ -360,11 +363,14 @@ class Sphere:
         vec = V[pick].full().T[0]
         projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
 
-        sym = (projector*sym).unit()
-
+        if self.animate_collapse:
+            self.add_animated_collapse(projector, sym, True)
+        else:
+            sym = (projector*sym).unit()
+            self.state = unsymmeterize(sym)
         #print("new_sym")
         #print(sym)
-        self.state = unsymmeterize(sym)
+        
 
         #print("new_state")
        # print(self.state)
@@ -401,7 +407,12 @@ class Sphere:
             #print("projector")
             #print(projector)
             #sys.stdout.flush() 
-            self.state = (projector*self.state).unit()
+            if self.animate_collapse:
+                print("bye")
+                self.add_animated_collapse(projector, self.state.copy(), False)
+                print("hi")
+            else:
+                self.state = (projector*self.state).unit()
             #print("new_state")
             #print(self.state)
             #sys.stdout.flush() 
@@ -494,4 +505,24 @@ class Sphere:
             pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
             vec = V[pick].full().T[0]
             projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
-            self.state = (projector*self.state).unit()
+
+            if self.animate_collapse:
+                self.add_animated_collapse(projector, self.state.copy(), False)
+            else:
+                self.state = (projector*self.state).unit()
+
+    def add_animated_collapse(self, projector, state, is_sym):
+        projector = projector
+        n_slices = int(1./self.dt)
+        slices = []
+        for i in range(n_slices):
+            slices.append((((float(i+1)/float(n_slices))*projector)*state).unit())
+
+        final_state = None
+        if is_sym:
+            final_state = unsymmeterize((projector*state).unit())
+        else:
+            final_state = (projector*state).unit()
+
+        self.animation_buffer.append([slices, final_state])
+

@@ -148,7 +148,9 @@ function set_dims() {
 }
 
 function set_density_selected() {
-	spheresSocket.emit("dim_choice", {"choice": document.querySelector('input[name = "dist_selected"]:checked').value});
+	if (document.querySelector('input[name = "dist_selected"]:checked') != null) {
+		spheresSocket.emit("dim_choice", {"choice": document.querySelector('input[name = "dist_selected"]:checked').value});
+	}
 }
 
 
