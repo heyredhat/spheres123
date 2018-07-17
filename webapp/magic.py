@@ -301,12 +301,12 @@ def separable(whole, dims, piece_index):
     reduction = whole_copy.ptrace(piece_index)
     entropy = qt.entropy_vn(reduction) 
     if entropy < 0.000001 and entropy > -0.999999:
-        return False
-    else:
         return True
+    else:
+        return False
 
 def fuzzy(a, b):
-    if a-b < 0.000001 and a-b > -0.999999:
+    if a-b < 0.001 and a-b > -0.001:
         return True
     else:
         return False
@@ -345,7 +345,7 @@ def apply_mobius(state, mobius):
 def mobius_connection(three_stars_now, three_stars_later):
     abc = [xyz_c(xyz) for xyz in three_stars_now]
     xyz = [xyz_c(xyz) for xyz in three_stars_later]
-    
+
     A = np.array([["ax", "x", 1],
                   ["by", "y", 1],
                   ["cz", "z", 1]])

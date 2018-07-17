@@ -425,7 +425,25 @@ class Sphere:
             return self.state.ptrace(0)
 
     def are_separable(self, pieces):
-        return [separable(piece) for piece in pieces]
+        seps = []
+        for piece in pieces:
+            entropy = qt.entropy_vn(piece) 
+            if entropy < 0.001 and entropy > -0.001:
+                seps.append(True)
+            else:
+                seps.append(False)
+        #print(seps)
+        #sys.stdout.flush()
+        return seps
+
+    def separable_skies(self, pieces, are_separable):
+        skies = {}
+        for i in range(len(pieces)):
+            if are_separable[i] == True:
+                q = density_to_purevec(pieces[i])
+                #print(q)
+                skies[i] = q_SurfaceXYZ(q)
+        return skies
 
     def dist_pieces_spin(self, pieces):
         arrows = []

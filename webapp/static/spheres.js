@@ -52,6 +52,8 @@ var husimi_pts = false;
 var piece_arrows = [];
 var piece_spheres = [];
 
+var skies = {};
+
 /************************************************************************************************************/
 
 var raycaster = new THREE.Raycaster();
@@ -203,7 +205,22 @@ function render (response) {
 	var new_controls = response["controls"];
 	var new_piece_arrows = response["piece_arrows"];
 
+	var new_separability = response["separability"];
+	var new_skies = response["skies"];
+
 	//console.log(new_piece_arrows);
+
+	if (Object.keys(new_skies).length == 0) {
+		//console.log('hi');
+		for (var i in skies) {
+			for (j = 0; j < skies[i].length; ++j) {
+				scene.remove(skies[i][j]);
+			}
+			delete skies[i];
+		}
+		skies = {};
+	}
+
 
 	if (new_piece_arrows.length == piece_arrows.length) {
 		for(i = 0; i < piece_arrows.length; ++i) {
@@ -214,6 +231,44 @@ function render (response) {
 			piece_arrows[i].setLength(length);
 
 			piece_spheres[i].position.set(length*axis.x, length*axis.y, length*axis.z);
+
+			if (new_separability[i] == true) {
+				//piece_spheres[i].scale.x = 0;
+				//piece_spheres[i].scale.y = 0;
+				//piece_spheres[i].scale.z = 0;
+
+				if (i in skies) {
+					for (j = 0; j < skies[i].length; ++j) {
+						x = length*axis.x + new_skies[i][j][0]*0.1;
+						y = length*axis.y + new_skies[i][j][1]*0.1;
+						z = length*axis.z + new_skies[i][j][2]*0.1;
+						skies[i][j].position.set(x, y, z);
+					}
+				} else {
+					skies[i] = [];
+					for (j = 0; j < new_skies[i].length; ++j) {
+						var star_geometry = new THREE.SphereGeometry(0.04, 32, 32);
+						var star_material = new THREE.MeshPhongMaterial({color: 0xffffff});
+						var star = new THREE.Mesh(star_geometry, star_material);
+						x = length*axis.x + new_skies[i][j][0]*0.1;
+						y = length*axis.y + new_skies[i][j][1]*0.1;
+						z = length*axis.z +  new_skies[i][j][2]*0.1;
+						star.position.set(x, y, z);
+						skies[i].push(star);
+						scene.add(star);
+					}
+				}
+			} else {
+				if (i in skies) {
+					for (j = 0; j < skies[i].length; ++j) {
+						scene.remove(skies[i][j]);
+					}
+					delete skies[i];
+				}
+				//piece_spheres[i].scale.x = 1;
+				//piece_spheres[i].scale.y = 1;
+				//piece_spheres[i].scale.z = 1;
+			}
 		}
 	} else {
 		for(i = 0; i < piece_arrows.length; ++i) {

@@ -60,9 +60,13 @@ def animate():
             controls = sphere.controls() if sphere.show_controls else ""
 
             piece_arrows = []
+            separability = []
+            skies = {}
             if sphere.dimensionality != None:
                 pieces = sphere.distinguishable_pieces()
                 piece_arrows = sphere.dist_pieces_spin(pieces)
+                separability = sphere.are_separable(pieces)
+                skies = sphere.separable_skies(pieces, separability)
 
             data = json.dumps({"spin_axis" : sphere.spin_axis(),\
                                 "stars" : stuff["stars"],\
@@ -74,7 +78,9 @@ def animate():
                                 "plane_component_stars" : stuff["plane_component_stars"],\
                                 "husimi" : husimi,\
                                 "controls" : controls,\
-                                "piece_arrows": piece_arrows});
+                                "piece_arrows": piece_arrows,\
+                                "separability": separability,\
+                                "skies": skies});
             #print("about to sio.emit animate")
             sio.emit("animate", data)
             
