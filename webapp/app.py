@@ -1,76 +1,68 @@
 from spheres import *
 
-sphere = Sphere(state=qt.rand_ket(2),\
-                energy=qt.rand_herm(2),\
+sphere = Sphere(state=qt.rand_ket(4),\
+                energy=qt.rand_herm(4),\
                 dt=0.01,\
-                evolving=True,\
-                show_phase=True,\
-                show_components=False,\
-                show_husimi=False,\
-                show_projection=False)
+                evolving=True)
+
+options = {}
+options["show_phase"] = True
+options["show_components"] = False
+options["show_projection"] = False
+options["show_husimi"] = False
+options["show_measurements"] = False
+options["rotate/boost"] = 0
+options["component_unitarity"] = True
+options["click_selected"] = "sphere"
+options["distinguishable_selected"] = "sphere"
+options["symmetrical_selected"] = "sphere"
+options["1d_harmonic_oscillator"] = False
+options["2d_harmonic_oscillator"] = False
 
 ##################################################################################################################
 
-import sys
 import os
+import sys
 import json
 import time
-import eventlet
-#import gevent
-#import eventlet
-#@eventlet.monkey_patch()
-#import gevent
-#import geventwebsocket
-
-#from gevent import monkey
-#monkey.patch_all()
-#from threading import Thread
-
 import logging
-from flask import Flask, request, Response, render_template
-
 import socketio
-
+import eventlet
+import eventlet.wsgi
+from flask import Flask, request, Response, render_template
+    
 sio = socketio.Server(async_mode='eventlet')
-
 app = Flask("spheres")
 app.debug = True
 app.wsgi_app = socketio.Middleware(sio, app.wsgi_app)
-
 thread = None
 
 #log = logging.getLogger('werkzeug')
 #log.disabled = True
 #app.logger.disabled = True
 
-selected = "sphere";
-distinguishable_selected = "sphere"
-
-
 def animate():
     global sphere
+    global options
     while True:
         try:
-            #if sphere.animate_collapse and len(sphere.animation_buffer) > 0:
-            #    slices, final_state = sphere.animation_buffer[0]
-            #    if len(slices) == 0:
-            #        sphere.state = final_state
-            #        sphere.animation_buffer.pop(0)
-            #    else:
-            #        next_one = sphere.animation_buffer[0][0].pop(0)
-            #        sphere.state = next_one
-            #    sio.sleep(0.01)
-            #else:
-            #    
-            sphere.update()
+            if sphere.evolving:
+                if sphere.evolution == "1D":
+                    sphere.harmonic_oscillator_1D_evolve()
+                elif sphere.evolution == "2D":
+                    sphere.harmonic_oscillator_2D_evolve()
+                elif sphere.evolution == "spin":
+                    sphere.evolve(sphere.energy)
 
-            phase = sphere.phase() if sphere.show_phase else []
-            stuff = sphere.allstars(plane_stars=sphere.show_projection,\
-                                    component_stars=sphere.show_components,\
-                                    plane_component_stars=sphere.show_projection and sphere.show_components)
-            husimi = sphere.husimi() if sphere.show_husimi else []
-            controls = sphere.controls() if sphere.show_controls else ""
+            phase = sphere.phase() if options["show_phase"] else []
+            stuff = sphere.allstars(plane_stars=options["show_projection"],\
+                                    component_stars=options["show_components"],\
+                                    plane_component_stars=options["show_projection"]\
+                                        and options["show_components"])
+            husimi = sphere.husimi() if options["show_husimi"] else []
+            controls = sphere.pretty_measurements(harmonic1D=options["1d_harmonic_oscillator"], harmonic2D=options["2d_harmonic_oscillator"]) if options["show_measurements"] else ""
 
+            sym_arrows = sphere.sym_arrows() if options["symmetrical_selected"] != "sphere" else []
             piece_arrows = []
             separability = []
             skies = {}
@@ -79,6 +71,9 @@ def animate():
                 piece_arrows = sphere.dist_pieces_spin(pieces)
                 separability = sphere.are_separable(pieces)
                 skies = sphere.separable_skies(pieces, separability)
+
+            harmonic_osc_1d = sphere.harmonic_oscillator_1D() if options["1d_harmonic_oscillator"] else {}
+            harmonic_osc_2d = sphere.harmonic_oscillator_2D() if options["2d_harmonic_oscillator"] else {}
 
             data = json.dumps({"spin_axis" : sphere.spin_axis(),\
                                 "stars" : stuff["stars"],\
@@ -90,23 +85,17 @@ def animate():
                                 "plane_component_stars" : stuff["plane_component_stars"],\
                                 "husimi" : husimi,\
                                 "controls" : controls,\
-                                "piece_arrows": piece_arrows,\
-                                "separability": separability,\
-                                "skies": skies});
-            #print("about to sio.emit animate")
+                                "piece_arrows" : piece_arrows,\
+                                "separability" : separability,\
+                                "skies" : skies,\
+                                "1d_harmonic_oscillator" : harmonic_osc_1d,\
+                                "2d_harmonic_oscillator" : harmonic_osc_2d,\
+                                "sym_arrows" : sym_arrows});
             sio.emit("animate", data)
-            
             sio.sleep(0.001)
         except Exception as e:
-            print(e)
+            print("animate error!: %s" % e)
             sys.stdout.flush() 
-
-#gevent.spawn(animate)
-
-@sio.on("selected")
-def select(sid, data):
-    global selected
-    selected = data["selected"]
 
 @app.route("/")
 def root():
@@ -116,21 +105,193 @@ def root():
     return render_template("spheres.html")
 
 @sio.on('connect')
-def connect(sid, environ):
-    print('connect ', sid)
-    
+def connect(sid, data):
+    print("connected: ", sid)
 
 @sio.on('disconnect')
 def disconnect(sid):
-    print('disconnect ', sid)
+    print("disconnected: ", sid)
 
-dist_selected = "sphere"
+@sio.on("keypress")
+def key_press(sid, data):
+    global sphere
+    global options
+    keyCode = int(data["keyCode"])
+    print("keypress: keyCode %d" % keyCode)
+    if (keyCode == 97): # 'a'
+        do_rotation("x", inverse=True)
+    elif (keyCode == 100): # 'd'
+        do_rotation("x", inverse=False)
+    elif (keyCode == 115): # 's'
+        do_rotation("y", inverse=True)
+    elif (keyCode == 119): # 'w'
+        do_rotation("y", inverse=False)
+    elif (keyCode == 122): # 'z'
+        do_rotation("z", inverse=True)
+    elif (keyCode == 120): # 'x'
+        do_rotation("z", inverse=False)
+    elif (keyCode == 48): # '0'
+        options["component_unitarity"] = False if options["component_unitarity"] else True
+    elif (keyCode == 117): # 'u'
+        sphere.evolving = False if sphere.evolving else True
+    elif (keyCode == 105): # 'i'
+        sphere.random_state()
+    elif (keyCode == 111): # 'o'
+        sphere.random_energy()
+    elif (keyCode == 106): # 'j'
+        options["show_projection"] = False if options["show_projection"] else True
+    elif (keyCode == 107): # 'k'
+        options["show_components"] = False if options["show_components"] else True
+    elif (keyCode == 108): # 'l'
+        options["show_phase"] = False if options["show_phase"] else True
+    elif (keyCode == 91): # '['
+        sphere.dt = sphere.dt-0.00025
+    elif (keyCode == 93): # ']'
+        sphere.dt = sphere.dt+0.00025
+    elif (keyCode == 112): # 'p'
+        options["show_husimi"] = False if options["show_husimi"] else True
+    elif (keyCode == 113): # 'q'
+        sphere.destroy_star()
+        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
+        options["symmetrical_selected"] = "sphere"
+        options["distinguishable_selected"] = "sphere"
+    elif (keyCode == 101): # 'e'
+        sphere.create_star()
+        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
+        options["symmetrical_selected"] = "sphere"
+        options["distinguishable_selected"] = "sphere"
+    elif (keyCode == 46): # '.'
+        options["show_measurements"] = False if options["show_measurements"] else True
+    elif (keyCode == 49): # '1'
+        do_collapse("x")
+    elif (keyCode == 50): # '2'
+        do_collapse("y")
+    elif (keyCode == 51): # '3'
+        do_collapse("z")
+    elif (keyCode == 52): # '4'
+        do_collapse("h")
+    elif (keyCode == 53): # '5'
+        do_collapse("r")
+    elif (keyCode == 109): # 'm'
+        options["rotate/boost"] += 1
+        if options["rotate/boost"] > 2:
+            options["rotate/boost"] = 0
+        if options["rotate/boost"] == 0:
+            sio.emit("collapsed", json.dumps({"message": "spin rotation activated!"}))
+        elif options["rotate/boost"] == 1:
+            sio.emit("collapsed", json.dumps({"message": "boost activated!"}))
+        elif options["rotate/boost"] == 2:
+            sio.emit("collapsed", json.dumps({"message": "mobius rotation activated!"}))
+    elif (keyCode == 110): # 'n'
+        if options["symmetrical_selected"] == "sphere":
+            options["symmetrical_selected"] = 0
+        else:
+            options["symmetrical_selected"] += 1
+            if options["symmetrical_selected"] >= sphere.n()-1:
+                options["symmetrical_selected"] = "sphere"
+        if options["symmetrical_selected"] == "sphere":
+            sio.emit("collapsed", json.dumps({"message": "%s selected for measurement/rotation" %\
+                (str(options["symmetrical_selected"]))}))        
+        else: 
+            sio.emit("collapsed", json.dumps({"message": "symmetrical %s selected for measurement/rotation" %\
+                (str(options["symmetrical_selected"]))}))  
+    elif (keyCode == 99): # 'c'
+        options["1d_harmonic_oscillator"] = False if options["1d_harmonic_oscillator"] else True
+        if options["1d_harmonic_oscillator"]:
+            sio.emit("collapsed", json.dumps({"message": "showing 1D harmonic oscillator!"}))
+        else:
+            sio.emit("collapsed", json.dumps({"message": "hiding 1D harmonic oscillator!"}))
+    elif (keyCode == 118): # 'v'     
+        options["2d_harmonic_oscillator"] = False if options["2d_harmonic_oscillator"] else True
+        if options["2d_harmonic_oscillator"]:
+            sio.emit("collapsed", json.dumps({"message": "showing 2D harmonic oscillator!"}))
+        else:
+            sio.emit("collapsed", json.dumps({"message": "hiding 2D harmonic oscillator!"}))
+    elif (keyCode == 98): # 'b'
+        if sphere.evolution == "spin":
+            sphere.evolution = "1D"
+        elif sphere.evolution == "1D":
+            sphere.evolution = "2D"
+        elif sphere.evolution == "2D":
+            sphere.evolution = "spin"
+        sio.emit("collapsed", json.dumps({"message": "evolution type: %s!" % sphere.evolution}))
+    elif (keyCode == 54): # '6'
+        sphere.harmonic_oscillator_1D_collapse("position")
+        sio.emit("collapsed", json.dumps({"message": "1D position collapse!"}))
+    elif (keyCode == 55): # '7'
+        sphere.harmonic_oscillator_1D_collapse("momentum")
+        sio.emit("collapsed", json.dumps({"message": "1D momentum collapse!"}))
+    elif (keyCode == 56): # '8'
+        sphere.harmonic_oscillator_1D_collapse("number")
+        sio.emit("collapsed", json.dumps({"message": "1D number collapse!"}))
+    elif (keyCode == 57): # '9'
+        sphere.harmonic_oscillator_1D_collapse("energy")
+        sio.emit("collapsed", json.dumps({"message": "1D energy collapse!"}))
 
-@sio.on("dim_set")
+def do_rotation(direction, inverse=False):
+    global sphere
+    global options
+    if options["distinguishable_selected"] != "sphere":
+        sphere.rotate_distinguishable(options["distinguishable_selected"], direction, dt=sphere.dt, inverse=inverse)
+    else:
+        if options["symmetrical_selected"] != "sphere":
+            sphere.rotate_symmetrical(direction, options["symmetrical_selected"], dt=sphere.dt, inverse=inverse)
+        else:
+            if options["rotate/boost"] == 0:
+                selected = options["click_selected"]
+                if selected.startswith("star"):
+                    sphere.rotate_star(int(selected[selected.index("_")+1:]), direction, inverse=inverse)
+                elif selected.startswith("component"):
+                    sphere.rotate_component(int(selected[selected.index("_")+1:]), direction, inverse=inverse,\
+                        unitary=options["component_unitarity"])
+                else:
+                    sphere.rotate(direction, inverse=inverse)
+            elif options["rotate/boost"] == 2:
+                sphere.mink_rotate(direction, sphere.dt, inverse=inverse)
+            elif options["rotate/boost"] == 1:
+                sphere.boost(direction, sphere.dt, inverse=inverse)
+
+def do_collapse(direction):
+    global sphere
+    global options
+    if options["distinguishable_selected"] != "sphere":
+        if direction != "h":
+            sphere.distinguishable_collapse(options["distinguishable_selected"], direction)
+            message = "distinguishable %d collapse!" % (options["distinguishable_selected"])
+            sio.emit("collapsed", json.dumps({"message": message}))
+    else:
+        if options["symmetrical_selected"] == "sphere":
+            op = None
+            if direction == "x":
+                op = sphere.paulis()[0][0]
+            elif direction == "y":
+                op = sphere.paulis()[0][1]
+            elif direction == "z":
+                op = sphere.paulis()[0][2]
+            elif direction == "h":
+                op = sphere.energy
+            elif direction == "r":
+                op = qt.rand_herm(sphere.n())
+            pick, L, probabilities = sphere.collapse(op)
+            message = "last collapse: %.2f of %s\n                with {%s}!" \
+                % (L[pick], np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
+        else:
+            sphere.symmetrical_collapse(direction, options["symmetrical_selected"])
+            message = "symmetrical %d collapse!" % (options["symmetrical_selected"])
+            sio.emit("collapsed", json.dumps({"message": message}))
+
+@sio.on("selected") # click on sphere/white star/red star
+def select(sid, data):
+    global options
+    options["click_selected"] = data["selected"]
+
+@sio.on("dim_set") # dims text box
 def dim_set(sid, data):
     global sphere
-    global dist_selected
-    dist_selected = "sphere"
+    global options
+    options["distinguishable_selected"] = "sphere"
     if data["dims"].strip() == "":
         sphere.dimensionality = None
         sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
@@ -148,308 +309,21 @@ def dim_set(sid, data):
                 ctrls += "</form>"
                 sio.emit("new_dist_ctrls", {"new_dist_ctrls": ctrls})
         except:
-            pass
+            print("dim_set error!: %s" % e)
+            sys.stdout.flush() 
 
-
-
-@sio.on("dim_choice")
+@sio.on("dim_choice") # distinguishable selection
 def dim_choice(sid, data):
-    global dist_selected
+    global options
     choice = int(data["choice"])
     if choice == -1:
-        dist_selected = "sphere"
+        options["distinguishable_selected"] = "sphere"
     else:
-        dist_selected = choice
-
-mink = 0
-unitary_component = True
-to_measure = "sphere"
-#@app.route("/keypress/")
-@sio.on("keypress")
-def key_press(sid, data):
-    global dist_selected
-    global mink
-    global unitary_component
-    global sphere
-    global to_measure
-    #keyCode = int(request.args.get('keyCode'))
-    keyCode = int(data["keyCode"])
-    #stuff = {'success':True, 'collapsed':False}
-    #print(keyCode)
-
-    #print(keyCode)
-    if (keyCode == 97):
-        if dist_selected != "sphere":
-            sphere.rotate_distinguishable_piece(dist_selected, "x", dt=sphere.dt, inverse=True)
-        else:
-            if to_measure != "sphere":
-                sphere.boson_rotate("x", to_measure, dt=sphere.dt, inverse=True)
-            else:
-                if mink == 0:
-                    if selected.startswith("star"):
-                        sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=True)
-                    elif selected.startswith("component"):
-                        sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=True, unitary=unitary_component)
-                    else:
-                        sphere.rotate("x", inverse=True)
-                #elif mink == 2:
-                #    sphere.mink_rotate("x", sphere.dt, inverse=True)
-                elif mink == 1:
-                    sphere.boost("x", sphere.dt, inverse=True)
-    elif (keyCode == 100):  
-        if dist_selected != "sphere":
-            sphere.rotate_distinguishable_piece(dist_selected, "x", dt=sphere.dt, inverse=False)
-        else:
-            if to_measure != "sphere":
-                sphere.boson_rotate("x", to_measure, dt=sphere.dt, inverse=False)
-            else:     
-                if mink == 0:     
-                    if selected.startswith("star"):
-                        sphere.rotate_star(int(selected[selected.index("_")+1:]), "x", inverse=False)
-                    elif selected.startswith("component"):
-                        sphere.rotate_component(int(selected[selected.index("_")+1:]), "x", inverse=False, unitary=unitary_component)
-                    else:
-                        sphere.rotate("x", inverse=False)
-                #elif mink == 2:
-                #    sphere.mink_rotate("x", sphere.dt, inverse=False)
-                elif mink == 1:
-                    sphere.boost("x", sphere.dt, inverse=False)
-    elif (keyCode == 115):
-        if dist_selected != "sphere":
-            sphere.rotate_distinguishable_piece(dist_selected, "y", dt=sphere.dt, inverse=True)
-        else:
-            if to_measure != "sphere":
-                sphere.boson_rotate("y", to_measure, dt=sphere.dt, inverse=True)
-            else:
-                if mink == 0:
-                    if selected.startswith("star"):
-                        sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=True)
-                    elif selected.startswith("component"):
-                        sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=True, unitary=unitary_component)
-                    else:
-                        sphere.rotate("y", inverse=True)
-                #elif mink == 2:
-                #    sphere.mink_rotate("y", sphere.dt, inverse=True)
-                elif mink == 1:
-                    sphere.boost("y", sphere.dt, inverse=True)
-    elif (keyCode == 119):
-        if dist_selected != "sphere":
-            sphere.rotate_distinguishable_piece(dist_selected, "y", dt=sphere.dt, inverse=False)
-        else:
-            if to_measure != "sphere":
-                sphere.boson_rotate("y", to_measure, dt=sphere.dt, inverse=False)
-            else:
-                if mink == 0:
-                    if selected.startswith("star"):
-                        sphere.rotate_star(int(selected[selected.index("_")+1:]), "y", inverse=False)
-                    elif selected.startswith("component"):
-                        sphere.rotate_component(int(selected[selected.index("_")+1:]), "y", inverse=False, unitary=unitary_component)
-                    else:
-                        sphere.rotate("y", inverse=False)
-                #elif mink == 2:
-                #    sphere.mink_rotate("y", sphere.dt, inverse=False)
-                elif mink == 1:
-                    sphere.boost("y", sphere.dt, inverse=False)
-    elif (keyCode == 122):
-        if dist_selected != "sphere":
-            sphere.rotate_distinguishable_piece(dist_selected, "z", dt=sphere.dt, inverse=True)
-        else:
-            if to_measure != "sphere":
-                sphere.boson_rotate("z", to_measure, dt=sphere.dt, inverse=True)
-            else:
-                if mink == 0:
-                    if selected.startswith("star"):
-                        sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=True)
-                    elif selected.startswith("component"):
-                        sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=True, unitary=unitary_component)
-                    else:
-                        sphere.rotate("z", inverse=True)
-                #elif mink == 2:
-                #    sphere.mink_rotate("z", sphere.dt, inverse=True)
-                elif mink == 1:
-                    sphere.boost("z", sphere.dt, inverse=True)
-    elif (keyCode == 120):
-        if dist_selected != "sphere":
-            sphere.rotate_distinguishable_piece(dist_selected, "z", dt=sphere.dt, inverse=False)
-        else:
-            if to_measure != "sphere":
-                sphere.boson_rotate("z", to_measure, dt=sphere.dt, inverse=False)
-            else:
-                if mink == 0:
-                    if selected.startswith("star"):
-                        sphere.rotate_star(int(selected[selected.index("_")+1:]), "z", inverse=False)
-                    elif selected.startswith("component"):
-                        sphere.rotate_component(int(selected[selected.index("_")+1:]), "z", inverse=False, unitary=unitary_component)
-                    else:
-                        sphere.rotate("z", inverse=False)
-                #elif mink == 2:
-                #    sphere.mink_rotate("z", sphere.dt, inverse=False)
-                elif mink == 1:
-                    sphere.boost("z", sphere.dt, inverse=False)
-    elif (keyCode == 48): # 0
-        unitary_component = False if unitary_component else True
-    elif (keyCode == 117):
-        sphere.evolving = False if sphere.evolving else True
-    elif (keyCode == 105):
-        sphere.random_state()
-    elif (keyCode == 111):
-        sphere.random_energy()
-    elif (keyCode == 106):
-        sphere.show_projection = False if sphere.show_projection else True
-    elif (keyCode == 107):
-        sphere.show_components = False if sphere.show_components else True
-    elif (keyCode == 108):
-        sphere.show_phase = False if sphere.show_phase else True
-    elif (keyCode == 91):
-        sphere.dt = sphere.dt-0.00025
-    elif (keyCode == 93):
-        sphere.dt = sphere.dt+0.00025
-    elif (keyCode == 112):
-        sphere.show_husimi = False if sphere.show_husimi else True
-    elif (keyCode == 113):
-        sphere.destroy_star()
-        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
-        to_measure = "sphere"
-        dist_selected = "sphere"
-    elif (keyCode == 101):
-        sphere.create_star()
-        to_measure = "sphere"
-        sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
-        dist_selected = "sphere"
-    elif (keyCode == 46):
-        sphere.show_controls = False if sphere.show_controls else True
-    elif (keyCode == 49):
-        if dist_selected != "sphere":
-            sphere.measure_distinguishable_piece(dist_selected, "x")
-            message = "distinguishable %d collapse!" % (dist_selected)
-            sio.emit("collapsed", json.dumps({"message": message}))
-        else:
-            if to_measure == "sphere":
-                #print("collapsing x")
-                #sys.stdout.flush() 
-                #running = False
-                pick, L, probabilities = sphere.collapse(sphere.paulis()[0][0])
-                #print("did the function")
-                #sys.stdout.flush() 
-
-                #message = "\t%.2f of %s\n\twith {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                message = "last collapse: %.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                #print(message)
-                #sys.stdout.flush() 
-
-                sio.emit("collapsed", json.dumps({"message": message}))
-                #stuff["pick"] = message
-                #stuff["collapsed"] = True
-                #print("sent emission")
-                #sys.stdout.flush() 
-            else:
-                sphere.boson_collapse("x", to_measure)
-                message = "boson %d collapse!" % (to_measure)
-                sio.emit("collapsed", json.dumps({"message": message}))
-    elif (keyCode == 50):
-        if dist_selected != "sphere":
-            sphere.measure_distinguishable_piece(dist_selected, "y")
-            message = "distinguishable %d collapse!" % (dist_selected)
-            sio.emit("collapsed", json.dumps({"message": message}))
-        else:
-            if to_measure == "sphere":
-                #running = False
-                pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][1])
-                message = "last collapse: %.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                sio.emit("collapsed", json.dumps({"message": message}))
-                #stuff["pick"] = message
-                #stuff["collapsed"] = True
-            else:
-                sphere.boson_collapse("y", to_measure)
-                message = "boson %d collapse!" % (to_measure)
-                sio.emit("collapsed", json.dumps({"message": message}))
-    elif (keyCode == 51):
-        if dist_selected != "sphere":
-            sphere.measure_distinguishable_piece(dist_selected, "z")
-            message = "distinguishable %d collapse!" % (dist_selected)
-            sio.emit("collapsed", json.dumps({"message": message}))
-        else:
-            if to_measure == "sphere":
-                #running = False
-                pick, L, probabilities  = sphere.collapse(sphere.paulis()[0][2])
-                message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                sio.emit("collapsed", json.dumps({"message": message}))
-                #stuff["pick"] = message
-                #stuff["collapsed"] = True
-            else:
-                sphere.boson_collapse("z", to_measure)
-                message = "boson %d collapse!" % (to_measure)
-                sio.emit("collapsed", json.dumps({"message": message}))
-    elif (keyCode == 52):
-        if dist_selected != "sphere":
-            pass
-        else:
-            if to_measure == "sphere":
-                if sphere.energy != None:
-                    #running = False
-                    pick, L, probabilities = sphere.collapse(sphere.energy)
-                    message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                    sio.emit("collapsed", json.dumps({"message": message}))
-                    #stuff["pick"] = message
-                    #stuff["collapsed"] = True
-    elif (keyCode == 53):
-        if dist_selected != "sphere":
-            sphere.measure_distinguishable_piece(dist_selected, "r")
-            message = "distinguishable %d collapse!" % (dist_selected)
-            sio.emit("collapsed", json.dumps({"message": message}))
-        else:
-            if to_measure == "sphere":
-                #running = False
-                pick, L, probabilities  = sphere.collapse(qt.rand_herm(sphere.n()))
-                message = "%.2f of %s\n                with {%s}!" % (L[pick], np.array_str(L, precision=2, suppress_small=True), " ".join(["%.2f%%" % (100*p) for p in probabilities]))
-                sio.emit("collapsed", json.dumps({"message": message}))
-                #stuff["pick"] = message
-                #stuff["collapsed"] = True
-            else:
-                sphere.boson_collapse("r", to_measure)
-                message = "boson %d collapse!" % (to_measure)
-                sio.emit("collapsed", json.dumps({"message": message}))
-    elif (keyCode == 109): # m
-        mink += 1
-        if mink > 1:
-            mink = 0
-    elif (keyCode == 110): # n
-        if to_measure == "sphere":
-            to_measure = 0
-        else:
-            to_measure += 1
-            if to_measure >= sphere.n()-1:
-                to_measure = "sphere"
-        if to_measure == "sphere":
-            sio.emit("collapsed", json.dumps({"message": "%s selected for measurement/rotation" % (str(to_measure))}))        
-        else: 
-            sio.emit("collapsed", json.dumps({"message": "boson %s selected for measurement/rotation" % (str(to_measure))}))        
-    #elif (keyCode == 98): 
-    #    sphere.animate_collapse = True if not sphere.animate_collapse else False
-
-    #print("done keycode")
-    #return json.dumps(stuff), 200, {'ContentType':'application/json'} 
-
-@sio.on("start")
-def start(sid):
-    global running
-    print("starting...")
-    running = True
-    #return json.dumps({"success": True}), 200, {'ContentType':'application/json'} 
-
-@sio.on("stop")
-def stop(sid):
-    global running
-    print("stopping...")
-    running = False
-    #return json.dumps({"success": True}), 200, {'ContentType':'application/json'} 
+        options["distinguishable_selected"] = choice
 
 ##################################################################################################################
 
 if __name__ == '__main__':
-    import sys
-    import eventlet
-    import eventlet.wsgi
     app = socketio.Middleware(sio, app)
     port = int(sys.argv[1])
     eventlet.wsgi.server(eventlet.listen(('', port)), app) 

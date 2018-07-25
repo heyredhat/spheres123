@@ -3,14 +3,34 @@ import cmath
 import mpmath
 import sympy
 import scipy
+import gellman
+import operator
+import itertools
 import functools
 import qutip as qt
 import numpy as np
-import gellman
-import itertools
-import operator
 
 ##################################################################################################################
+
+def dim_spin(n):
+    return (n-1.)/2.
+
+def factors(n):    
+    return set(functools.reduce(list.__add__, 
+                ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)))
+
+def prime_factors(n):
+    i = 2
+    factors = []
+    while i * i <= n:
+        if n % i:
+            i += 1
+        else:
+            n //= i
+            factors.append(i)
+    if n > 1:
+        factors.append(n)
+    return factors
 
 def normalize(v):
     norm = np.linalg.norm(v)
@@ -18,26 +38,23 @@ def normalize(v):
        return v
     return v / norm
 
-def sph_xyz(theta, phi):
-    return [math.sin(theta)*math.cos(phi),\
-            math.sin(theta)*math.sin(phi),\
-            math.cos(theta)]
-
-def projectors(operator):
-    L, V = operator.eigenstates()
-    V = [v.ptrace(0) for v in V]
-    return L, V
-
 def evolver(state, operator, dt=0.01, inverse=False):
     unitary = (-2*math.pi*1j*operator*dt).expm()
     if inverse:
         unitary = unitary.dag()
     return unitary*state
 
-def dim_spin(n):
-    return (n-1.)/2.
+def xyz_radial(direction):
+    direction = np.array(direction)
+    length = np.sqrt(np.sum(direction**2))
+    return [normalize(direction).tolist(), length]
 
 ##################################################################################################################
+
+def sph_xyz(theta, phi):
+    return [math.sin(theta)*math.cos(phi),\
+            math.sin(theta)*math.sin(phi),\
+            math.cos(theta)]
 
 def c_xyz(c):
     if c == float('inf'):
@@ -85,7 +102,6 @@ def C_polynomial(roots):
     if zeros2 == len(roots):
         return [complex(1,0)] + [complex(0,0)]*(zeros2) 
     zeros = roots.count(float('Inf'))
-    #zeros = roots.count(complex(0,0))+roots.count(float('Inf'))
     roots = [root for root in roots if root != float('Inf')]
     if len(roots) == 0:
         return [complex(0,0)]*zeros + [complex(1,0)]
@@ -93,17 +109,9 @@ def C_polynomial(roots):
         s = sympy.symbols("s")
         polynomial = sympy.Poly(functools.reduce(lambda a, b: a*b, [s-root for root in roots]), domain="CC")
         if zeros2 > 0:
-        #    return [complex(1,0)] + [complex(0,0)]*zeros + [complex(0,0)]*(len(roots))
-           #if zeros2 > 1:
             return [complex(0,0)]*(zeros) + [complex(c) for c in polynomial.coeffs()] + [complex(0,0)]*(zeros2) 
-            #else:
-            #    return [complex(c) for c in polynomial.coeffs()] ++ [complex(0,0)]*(zeros)
         else:
             return [complex(0,0)]*(zeros) + [complex(c) for c in polynomial.coeffs()]
-
-        #print("UU"+ str(zeros2))
-        #if 
-
 
 def polynomial_C(polynomial):
     zeros = 0
@@ -123,15 +131,7 @@ def polynomial_C(polynomial):
             roots = [float('Inf') for i in range(len(polynomial)-zeros)]
     return poles+roots
 
-
-
-
 def C_v(roots):
-    #print("{")
-    #print(roots)
-   # print(C_polynomial(roots))
-    #print(polynomial_v(C_polynomial(roots)))
-    #print("}")
     return polynomial_v(C_polynomial(roots))
 
 def v_C(v):
@@ -153,7 +153,6 @@ def SurfaceXYZ_q(XYZ):
 
 def q_qubits(state):
     xyzs = q_SurfaceXYZ(state)
-    #print(xyzs)
     return [SurfaceXYZ_q([xyz]) for xyz in xyzs]
 
 def qubits_q(qubits):
@@ -180,12 +179,8 @@ def dicke_states(n):
     for k in range(n+1):
         pieces = [qt.basis(2, 0) for i in range(n-k)]
         pieces.extend([qt.basis(2,1) for i in range(k)])
-        #print("dicke")
-        #print("pieces")
-        #print(pieces)
         dicke = math.sqrt(math.factorial(n)/(math.factorial(n-k)*math.factorial(k)))*symmeterize(pieces)
         states.append(dicke)
-        #print(dicke)
     return states
 
 def unsymmeterize(state, use_dickes=None):
@@ -197,8 +192,15 @@ def unsymmeterize(state, use_dickes=None):
 
 ##################################################################################################################
 
+Kx = np.array([[0,1,0,0], [1,0,0,0], [0,0,0,0], [0,0,0,0]])
+Ky = np.array([[0,0,1,0], [0,0,0,0], [1,0,0,0], [0,0,0,0]])
+Kz = np.array([[0,0,0,1], [0,0,0,0], [0,0,0,0], [1,0,0,0]])
+
+Jx = np.array([[0,0,0,0], [0,0,0,0], [0,0,0,-1], [0,0,1,0]])
+Jy = np.array([[0,0,0,0], [0,0,0,1], [0,0,0,0], [0,-1,0,0]])
+Jz = np.array([[0,0,0,0], [0,0,-1,0], [0,1,0,0], [0,0,0,0]])
+
 def mink_hermitianPoint(mink):
-    #print(mink)
     t, x, y, z = mink.tolist()
     return (t*qt.identity(2) + x*qt.sigmax() + y*qt.sigmay() + z*qt.sigmaz()).unit()
 
@@ -231,29 +233,14 @@ def qubit_hermitianPoint(qubit):
     return qubit.ptrace(0)
 
 def hermitianPoint_qubit(herm):
-    #if herm.tr() == (herm*herm).tr():
     xyz = [-1*qt.expect(qt.sigmax(), herm),\
                qt.expect(qt.sigmay(), herm),\
                qt.expect(qt.sigmaz(), herm)]
     return SurfaceXYZ_q([xyz])
-    #else:
-    #    return "Not pure!"
 
 def mink_qubit(mink):
     herm = mink_hermitianPoint(mink)
     return hermitianPoint_qubit(herm)
-
-# 2x2
-def applyMobiusToPoint(mobius, herm):
-    return mobius*herm*mobius.dag()
-
-Kx = np.array([[0,1,0,0], [1,0,0,0], [0,0,0,0], [0,0,0,0]])
-Ky = np.array([[0,0,1,0], [0,0,0,0], [1,0,0,0], [0,0,0,0]])
-Kz = np.array([[0,0,0,1], [0,0,0,0], [0,0,0,0], [1,0,0,0]])
-
-Jx = np.array([[0,0,0,0], [0,0,0,0], [0,0,0,-1], [0,0,1,0]])
-Jy = np.array([[0,0,0,0], [0,0,0,1], [0,0,0,0], [0,-1,0,0]])
-Jz = np.array([[0,0,0,0], [0,0,-1,0], [0,1,0,0], [0,0,0,0]])
 
 def mink_rotate(mink, axis, angle, inverse=False):
     angle = angle*10
@@ -293,6 +280,16 @@ def mink_rotate_state(state, axis, dt=0.01, inverse=False):
     qubits2 = [mink_qubit(mink) for mink in minks]
     return qubits_q(qubits2)
 
+def mink_boost_qubits(qubits, axis, dt=0.01, inverse=False):
+    minks = [mink_boost(qubit_mink(qubit), axis, dt, inverse=inverse) for qubit in qubits]
+    qubits2 = [mink_qubit(mink) for mink in minks]
+    return qubits_q(qubits2)
+
+def mink_rotate_qubits(qubits, axis, dt=0.01, inverse=False):
+    minks = [mink_rotate(qubit_mink(qubit), axis, dt, inverse=inverse) for qubit in qubits]
+    qubits2 = [mink_qubit(mink) for mink in minks]
+    return qubits_q(qubits2)
+
 ##################################################################################################################
 
 def separable(whole, dims, piece_index):
@@ -315,207 +312,137 @@ def density_to_purevec(density):
     entropy = qt.entropy_vn(density) 
     if fuzzy(entropy, 0):
         U, S, V = np.linalg.svd(density.full())
-        #print("{")
-        #print(U)
-        #print(S)
-        #print(V)
-        #print("}")
         s = S.tolist()
         for i in range(len(s)):
             if fuzzy(s[i], 1):
                 return qt.Qobj(np.conjugate(V[i]))
 
-#if __name__ == "__main__":
-#    pass
-    #a = qt.rand_ket(2)
-    #b = a.ptrace(0)
-    #c = density_to_purevec(b)
+##################################################################################################################
+
+def construct_1dfock_operators(modes, freq=1):
+    create = qt.create(modes)
+    destroy = qt.destroy(modes)
+    number = qt.num(modes)
+    position = (qt.destroy(modes) + qt.destroy(modes).dag())/np.sqrt(2)
+    momentum = -1j * (qt.destroy(modes) - qt.destroy(modes).dag())/np.sqrt(2)
+    energy = 2 * np.pi * freq * (destroy.dag() * destroy + 0.5)
+    return {"create": create,\
+            "destroy": destroy,\
+            "number": number,\
+            "position": position,\
+            "momentum": momentum,\
+            "energy": energy}
+
+def construct_2dfock_operators(modes, freq=1):
+    create = qt.create(modes)
+    destroy = qt.destroy(modes)
+    number = qt.num(modes)
+    position = (qt.destroy(modes) + qt.destroy(modes).dag())/np.sqrt(2)
+    momentum = -1j * (qt.destroy(modes) - qt.destroy(modes).dag())/np.sqrt(2)
+    operators = {"X": {}, "Y": {}}
+    operators["X"]["create"] = qt.tensor(create, qt.identity(modes))
+    operators["X"]["destroy"] = qt.tensor(destroy, qt.identity(modes))
+    operators["X"]["number"] = qt.tensor(number, qt.identity(modes))
+    operators["X"]["position"] = qt.tensor(position, qt.identity(modes))
+    operators["X"]["momentum"] = qt.tensor(momentum, qt.identity(modes))
+    operators["Y"]["create"] = qt.tensor(qt.identity(modes), create)
+    operators["Y"]["destroy"] = qt.tensor(qt.identity(modes), destroy)
+    operators["Y"]["number"] = qt.tensor(qt.identity(modes), number)
+    operators["Y"]["position"] = qt.tensor(qt.identity(modes), position)
+    operators["Y"]["momentum"] = qt.tensor(qt.identity(modes), momentum)
+    operators["position"] = qt.tensor(position, position)
+    operators["little_position"] = position
+    operators["momentum"] = qt.tensor(momentum, momentum)
+    operators["little_momentum"] = momentum
+    operators["T"] = 2 * np.pi * freq * ((operators["X"]["destroy"].dag() * operators["X"]["destroy"] + 0.5)+\
+                        (operators["Y"]["destroy"].dag() * operators["Y"]["destroy"] + 0.5))
+    operators["Jx"] = (1./(2))*(operators["X"]["create"]*operators["Y"]["destroy"] + operators["Y"]["create"]*operators["X"]["destroy"])
+    operators["Jy"] = -1*1j*(1./(2))*(operators["X"]["create"]*operators["Y"]["destroy"] - operators["Y"]["create"]*operators["X"]["destroy"])
+    operators["Jz"] = -1*(1./(2))*(operators["X"]["create"]*operators["X"]["destroy"] - operators["Y"]["create"]*operators["Y"]["destroy"])
+    return operators
+
+def spin_fockBASIS(j, m):
+    n1 = int(j+m)
+    n2 = int(j-m)
+    modes = int(2*j)+1
+    vacuum = qt.tensor(qt.basis(modes, 0), qt.basis(modes, 0))
+    createX = qt.tensor(qt.create(modes), qt.identity(modes))
+    createY = qt.tensor(qt.identity(modes), qt.create(modes))
+    first = None
+    second = None
+    if n1 == 0:
+        first = qt.tensor(qt.identity(modes), qt.identity(modes))
+    elif n1 == 1:
+        first = createX
+    else:
+        first = functools.reduce(lambda M, N: M*N, [createX for i in range(n1)])
+    if n2 == 0:
+        second = qt.tensor(qt.identity(modes), qt.identity(modes))
+    elif n2 == 1:
+        second = createY
+    else:
+        second = functools.reduce(lambda M, N: M*N, [createY for i in range(n2)])
+    op = (first*second)/(math.sqrt(math.factorial(j+m))*math.sqrt(math.factorial(j-m)))
+    return op*vacuum#, (n1, n2)
+
+def fock_spinBASIS(n1, n2):
+    j = (n1+n2)/2
+    m = n1-j
+    return qt.spin_state(j, m)#, (j, m)
+
+def spin_fock(spin_state):
+    n = spin_state.shape[0]
+    j = dim_spin(n)
+    bases = []
+    for m in np.arange(-1*j, j+1, 1):
+        amp = spin_state.overlap(qt.spin_state(j, m))
+        bases.append(amp*spin_fockBASIS(j, m))
+    return sum(bases)
+
+def fock_spin(fock_state):
+    fock_n = fock_state.shape[0]
+    n_sum = int(math.sqrt(fock_n))
+    bases = []
+    for n1 in range(0, n_sum):
+        for n2 in range(0, n_sum):
+            if n1+n2 == n_sum-1:
+                amp = fock_state.overlap(qt.tensor(qt.basis(n_sum, n1), qt.basis(n_sum, n2)))
+                bases.append(amp*fock_spinBASIS(n1, n2))
+    return sum(bases)
 
 ##################################################################################################################
 
-def apply_mobius(state, mobius):
-    points = [qubit_hermitianPoint(qubit) for qubit in q_qubits(state)]
-    print("{")
-    print(points)
-    mob = qt.Qobj(mobius)
-    points = [mob.dag()*point*mob for point in points]
-    print(points)
-    return qubits_q([hermitianPoint_qubit(point) for point in points])
+def coupling(a, b):
+    particle_types = []
+    for a_i in np.arange(-1*a, a+1, 1):
+        for b_j in np.arange(-1*b, b+1, 1):
+            c = abs(a_i+b_j)
+            c2 = abs(abs(a_i)+abs(b_j))
+            if c != c2:
+                particle_types.append(c2)
+            particle_types.append(c)
 
-def mobius_connection(three_stars_now, three_stars_later):
-    abc = [xyz_c(xyz) for xyz in three_stars_now]
-    xyz = [xyz_c(xyz) for xyz in three_stars_later]
-
-    A = np.array([["ax", "x", 1],
-                  ["by", "y", 1],
-                  ["cz", "z", 1]])
-    A_ = np.array([[0, 0, 1],
-                  [0, 0, 1],
-                  [0, 0, 1]], dtype=np.complex128)
-    B = np.array([["ax", "a", "x"],
-                  ["by", "b", "y"],
-                  ["cz", "x", "z"]])
-    B_ = np.array([[0, 0, 0],
-                  [0, 0, 0],
-                  [0, 0, 0]], dtype=np.complex128)
-    C = np.array([["a", "x", 1],
-                  ["b", "y", 1],
-                  ["c", "z", 1]])
-    C_ = np.array([[0, 0, 1],
-                  [0, 0, 1],
-                  [0, 0, 1]], dtype=np.complex128)
-    D = np.array([["ax", "a", 1],
-                  ["by", "b", 1],
-                  ["cz", "c", 1]])
-    D_ = np.array([[0, 0, 1],
-                  [0, 0, 1],
-                  [0, 0, 1]], dtype=np.complex128)
-
-    ABC = ["a", "b", "c"]
-    XYZ = ["x", "y", "z"]
-    GUYS = [A, B, C, D]
-    GUYS_ = [A_, B_, C_, D_]
-
-    for m in range(3):
-        if abc[m] == float('inf'):
-            for i in range(3):
-                for j in range(3):
-                    for k in range(4):
-                        if isinstance(GUYS[k][i][j], str):
-                            if GUYS[k][i][j].contains(ABC[m]):
-                                GUYS[k][i][j].remove(ABC[m])
-                            else:
-                                GUYS[k][i][j] = '0'
-        if xyz[m] == float('inf'):
-            for i in range(3):
-                for j in range(3):
-                    for k in range(4):
-                        if isinstance(GUYS[k][i][j], str):
-                            if GUYS[k][i][j].contains(XYZ[m]):
-                                GUYS[k][i][j].remove(XYZ[m])
-                            else:
-                                GUYS[k][i][j] = '0'
-
-    for i in range(3):
-        for j in range(3):
-            for k in range(4):
-                if isinstance(GUYS[k][i][j], str):
-                    if len(GUYS[k][i][j]) == 1:
-                        if GUYS[k][i][j] == '0':
-                            GUYS_[k][i][j] = 0
-                        elif GUYS[k][i][j] in ABC:
-                            GUYS_[k][i][j] = abc[ABC.index(GUYS[k][i][j])]
-                        elif GUYS[k][i][j] in XYZ:
-                            GUYS_[k][i][j] = xyz[XYZ.index(GUYS[k][i][j])]
-                    else:
-                       # print(GUYS[k][i][j])
-                        one, two = GUYS[k][i][j][0], GUYS[k][i][j][1]
-                        if one in ABC:
-                            one = abc[ABC.index(one)]
-                        elif one in XYZ:
-                            one = xyz[XYZ.index(one)]
-                        if two in ABC:
-                            two = abc[ABC.index(two)]
-                        elif two in XYZ:
-                            two = xyz[XYZ.index(two)]
-                        GUYS_[k][i][j] = one*two
-
-    #print(GUYS_[0])
-
-    AA = np.linalg.det(GUYS_[0])
-    BB = np.linalg.det(GUYS_[1])
-    CC = np.linalg.det(GUYS_[2])
-    DD = np.linalg.det(GUYS_[3])
-    return np.array([[AA, BB], [CC, DD]])    
-
-if __name__ == "__main__":
-    stateA = qt.rand_ket(4)
-    stateB = qt.rand_ket(4)
-    stateAstars = q_SurfaceXYZ(stateA)
-    stateBstars = q_SurfaceXYZ(stateB)
-    mob = mobius_connection(stateAstars, stateBstars)
-    Atransformed = apply_mobius(stateA, mob)
-    AtransformedStars = q_SurfaceXYZ(Atransformed)
-
-def mobius_connected(skyA, skyB):
-    pass
-
-def mobius_for_collapse():
-    pass
-
-def decompose_mobius_rot_boost():
-    pass
-
-
-
-def iterate_majorana():
-    pass
-
-##################################################################################################################
-
-def factors(n):    
-    return set(functools.reduce(list.__add__, 
-                ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)))
-
-def prime_factors(n):
-    i = 2
-    factors = []
-    while i * i <= n:
-        if n % i:
-            i += 1
+    T = {}
+    for particle in particle_types:
+        particle_dict = {}
+        if particle == 0:
+            states = []
+            for a_i in np.arange(-1*a, a+1, 1):
+                for b_j in np.arange(-1*b, b+1, 1):
+                    state = qt.clebsch(a, b, 0, a_i, b_j, 0)*\
+                        qt.tensor(qt.spin_state(a, a_i), qt.spin_state(b, b_j))
+                    states.append(state)
+            STATE = sum(states)
+            particle_dict[particle] = (qt.spin_state(0,0), STATE)
         else:
-            n //= i
-            factors.append(i)
-    if n > 1:
-        factors.append(n)
-    return factors
-
-##################################################################################################################
-
-if __name__ == '__main2__':
-    herm = qt.rand_herm(2)
-    mink = hermitianPoint_mink(herm)
-    herm2 = mink_hermitianPoint(mink)
-
-    aqubit = qt.rand_ket(2)
-    amink = qubit_mink(aqubit)
-    aherm = mink_hermitianPoint(amink)
-    aherm2 = qubit_hermitianPoint(aqubit)
-    aqubit2 = hermitianPoint_qubit(aherm)
-    amink2 = qubit_mink(aqubit2)
-
-if __name__ == '__another__':
-    n = 4
-    state = qt.rand_ket(n)
-    print("state")
-    print(state)
-    qubits = q_qubits(state)
-    print("qubits")
-    print(qubits)
-    state2 = qubits_q(qubits)
-    #print("back to state")
-    #print(state2)
-    #print(q_qubits(state2))
-    sym = symmeterize(qubits)
-    print("symmeterized")
-    print(sym)
-    state2 = unsymmeterize(sym)
-    print("back to state")
-    print(state2)
-    qubits2 = q_qubits(state2)
-    print("back to qubits")
-    print(qubits2)
-
-    #qubit = qt.rand_ket(2)
-    #xyz = q_SurfaceXYZ(qubit)
-    #new_qubit = SurfaceXYZ_q(xyz)
-    #xyz2 = q_SurfaceXYZ(new_qubit)
-
-    #v = qubit.full().T[0]
-    #polynomial = v_polynomial(v)
-    #v2 = polynomial_v(polynomial)
-
-    #C = polynomial_C2(polynomial) 
-    #poly2 = C_polynomial2(C)
-
-
+            for c_m in np.arange(-1*particle, particle+1, 1):
+                states = []
+                for a_i in np.arange(-1*a, a+1, 1):
+                    for b_j in np.arange(-1*b, b+1, 1):
+                        state = qt.clebsch(a, b, particle, a_i, b_j, c_m)*\
+                            qt.tensor(qt.spin_state(a, a_i), qt.spin_state(b, b_j))
+                        states.append(state)
+                STATE = sum(states)
+                particle_dict[c_m] = (qt.spin_state(particle, c_m), STATE)
+        T[particle] = particle_dict
+    return T

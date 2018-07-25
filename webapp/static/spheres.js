@@ -46,13 +46,13 @@ var plane_stars = [];
 var plane_arrows = [];
 var component_plane_stars = [];
 var component_plane_arrows = [];
-
 var husimi_pts = false;
-
 var piece_arrows = [];
 var piece_spheres = [];
-
 var skies = {};
+var harmonic_osc1D = {};
+var harmonic_osc2D = {};
+var sym_arrows = [];
 
 /************************************************************************************************************/
 
@@ -85,39 +85,8 @@ document.addEventListener( 'mousedown',
 					}
 				}
 			}
-			//intersections[0].object.material.color.setHex( Math.random() * 0xffffff );
 		}
 	}, false );
-
-/************************************************************************************************************/
-
-/*function start_server () {
-	$.ajax({
-		url: "/start/",
-		dataType: "json",
-		success: function (response) { },
-		error: function (response) {
-			console.log("error!: " + response.responseText);
-		},
-		always: function (response) {
-			console.log("haylp!: " + response.responseText);
-		}
-	});
-}
-
-function stop_server () {
-	$.ajax({
-		url: "/stop/",
-		dataType: "json",
-		success: function (response) { },
-		error: function (response) {
-			console.log("error!: " + response.responseText);
-		},
-		always: function (response) {
-			console.log("haylp!: " + response.responseText);
-		}
-	});
-}*/
 
 /************************************************************************************************************/
 
@@ -126,17 +95,10 @@ var spheresSocket = io.connect(null, {port: location.port, rememberTransport: fa
 spheresSocket.on("animate", function(socketData) {
 	spheresSocket.emit("selected", {"selected": selected});
 	render(JSON.parse(socketData));
-	//console.log("animate");
 });
 
 spheresSocket.on("collapsed", function(socketData) {
-	//console.log("collapsed");
-	//stuff = JSON.parse(socketData);
-	//spheresSocket.emit("stop");
-	//alert(socketData["message"]);
-	//console.log(socketData["message"]);
 	document.getElementById("last_collapse").innerHTML = JSON.parse(socketData)["message"];
-	//spheresSocket.emit("start");
 });
 
 spheresSocket.on("new_dist_ctrls", function(socketData) {
@@ -149,10 +111,10 @@ function set_dims() {
 
 function set_density_selected() {
 	if (document.querySelector('input[name = "dist_selected"]:checked') != null) {
-		spheresSocket.emit("dim_choice", {"choice": document.querySelector('input[name = "dist_selected"]:checked').value});
+		spheresSocket.emit("dim_choice", {"choice": 
+			document.querySelector('input[name = "dist_selected"]:checked').value});
 	}
 }
-
 
 /************************************************************************************************************/
 
@@ -169,30 +131,14 @@ document.addEventListener("keypress", function (event) {
     		selected = "sphere";
     	} 
     	spheresSocket.emit("keypress", {"keyCode": keyCode});
-
-		/*$.ajax({
-			url: "/keypress/?keyCode=" + keyCode,
-			dataType: "json",
-			success: function (response) { 
-				if(response["collapsed"] == true) {
-					pick = response["pick"];
-					alert(pick);
-					start_server();
-				}
-			},
-			error: function (response) {
-				console.log("error!: " + response.responseText);
-			},
-			always: function (response) {
-				console.log("haylp!: " + response.responseText);
-			}
-		});*/
 	}
 });
 
-
-
 /************************************************************************************************************/
+
+function sigmoid(t) {
+    return 1/(1+Math.pow(Math.E, -t));
+}
 
 function render (response) {
 	var new_spin_axis = response["spin_axis"];
@@ -206,14 +152,181 @@ function render (response) {
 	var new_husimi = response["husimi"];
 	var new_controls = response["controls"];
 	var new_piece_arrows = response["piece_arrows"];
-
 	var new_separability = response["separability"];
 	var new_skies = response["skies"];
+	var new_harmonic_osc1D = response["1d_harmonic_oscillator"];
+	var new_harmonic_osc2D = response["2d_harmonic_oscillator"];
+	var new_sym_arrows = response["sym_arrows"];
 
-	//console.log(new_piece_arrows);
+	// Update arrows corresponding to symmetrical qubits
+	if (new_sym_arrows.length == 0) {
+		for (i = 0; i < sym_arrows.length; ++i) {
+			scene.remove(sym_arrows[i]);
+			delete sym_arrows[i];
+		}
+		sym_arrows = [];
+	} else {
+		if (sym_arrows.length == 0) {
+			for (i = 0; i < new_sym_arrows.length; ++i) {
+				axis = new THREE.Vector3(new_sym_arrows[i][0][0], new_sym_arrows[i][0][1], 
+										new_sym_arrows[i][0][2]);
+				length = new_sym_arrows[i][1];
+				var sym_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), 1, 0xffffff, 1, 1);
+				sym_arrow.setDirection(axis);
+				sym_arrow.setLength(length);
+				sym_arrows.push(sym_arrow);
+				scene.add(sym_arrow);
+			}
+		} else {
+			for (i = 0; i < new_sym_arrows.length; ++i) {
+				axis = new THREE.Vector3(new_sym_arrows[i][0][0], new_sym_arrows[i][0][1], 
+										new_sym_arrows[i][0][2]);
+				length = new_sym_arrows[i][1];
+				sym_arrows[i].setDirection(axis);
+				sym_arrows[i].setLength(length);
+			}
+		}
+	}
 
+	// Update harmonic oscillator 1D
+	// ["position"], ["momentum"], ["number"], ["energy"]
+	if (Object.keys(new_harmonic_osc1D).length == 0) {
+		// delete
+		scene.remove(harmonic_osc1D["pos_sphere"]);
+		//scene.remove(harmonic_osc1D["pos_arrow"]);
+		scene.remove(harmonic_osc1D["mom_arrow"]);
+		delete harmonic_osc1D["pos_sphere"];
+		//delete harmonic_osc1D["pos_arrow"];
+		delete harmonic_osc1D["mom_arrow"];
+		harmonic_osc1D = {};
+	} else {
+		if (Object.keys(harmonic_osc1D).length == 0) {
+			// create
+			energy = new_harmonic_osc1D["energy"];
+			var pos1D_sphere_geometry = new THREE.SphereGeometry(0.05, 32, 32);
+			var pos1D_sphere_material = new THREE.MeshPhongMaterial({color: 0xff6ec7 });
+			var pos1D_sphere = new THREE.Mesh(pos1D_sphere_geometry, pos1D_sphere_material);
+			//var pos1D_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), 1, color);
+			var mom1D_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), 1, 0x00FF00, 1, 1);
+
+			pos_axis = new THREE.Vector3(new_harmonic_osc1D["position"][0][0], new_harmonic_osc1D["position"][0][1], 
+										new_harmonic_osc1D["position"][0][2]);
+			pos_length = new_harmonic_osc1D["position"][1];
+			pos1D_sphere.position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+			//pos1D_arrow.setDirection(pos_axis);
+			//pos1D_arrow.setLength(pos_length);
+			mom_axis = new THREE.Vector3(new_harmonic_osc1D["momentum"][0][0], new_harmonic_osc1D["momentum"][0][1], 
+										new_harmonic_osc1D["momentum"][0][2]);
+			mom_length = new_harmonic_osc1D["momentum"][1];
+			mom1D_arrow.setDirection(mom_axis);
+			mom1D_arrow.setLength(mom_length);
+			mom1D_arrow.position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+
+			scene.add(pos1D_sphere);
+			//scene.add(pos1D_arrow);
+			scene.add(mom1D_arrow);
+			harmonic_osc1D["pos_sphere"] = pos1D_sphere;
+			//harmonic_osc1D["pos_arrow"] = pos1D_arrow;
+			harmonic_osc1D["mom_arrow"] = mom1D_arrow;
+		} else {
+			// update
+			energy = new_harmonic_osc1D["energy"];
+			pos_axis = new THREE.Vector3(new_harmonic_osc1D["position"][0][0], new_harmonic_osc1D["position"][0][1], 
+										new_harmonic_osc1D["position"][0][2]);
+			pos_length = new_harmonic_osc1D["position"][1];
+			mom_axis = new THREE.Vector3(new_harmonic_osc1D["momentum"][0][0], new_harmonic_osc1D["momentum"][0][1], 
+										new_harmonic_osc1D["momentum"][0][2]);
+			mom_length = new_harmonic_osc1D["momentum"][1];
+			harmonic_osc1D["pos_sphere"].position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+			//harmonic_osc1D["pos_sphere"].material.color = color;
+			//harmonic_osc1D["pos_arrow"].setDirection(pos_axis);
+			//harmonic_osc1D["pos_arrow"].setLength(pos_length);
+			//harmonic_osc1D["pos_arrow"].setColor(color);
+			harmonic_osc1D["mom_arrow"].setDirection(mom_axis);
+			harmonic_osc1D["mom_arrow"].setLength(mom_length);
+			harmonic_osc1D["mom_arrow"].position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+		}
+	}
+
+	// Update harmonic oscillator 2D
+	// ["position"], ["momentum"], ["angmo"], ["number"], ["energy"]
+	if (Object.keys(new_harmonic_osc2D).length == 0) {
+		scene.remove(harmonic_osc2D["pos_sphere"]);
+		//scene.remove(harmonic_osc2D["pos_arrow"]);
+		scene.remove(harmonic_osc2D["mom_arrow"]);
+		scene.remove(harmonic_osc2D["angmo_arrow"]);
+		delete harmonic_osc2D["pos_sphere"];
+		//delete harmonic_osc2D["pos_arrow"];
+		delete harmonic_osc2D["mom_arrow"];
+		delete harmonic_osc2D["angmo_arrow"];
+		harmonic_osc2D = {};
+	} else {
+		if (Object.keys(harmonic_osc2D).length == 0) {
+			energy = new_harmonic_osc2D["energy"];
+			var pos2D_sphere_geometry = new THREE.SphereGeometry(0.05, 32, 32);
+			var pos2D_sphere_material = new THREE.MeshPhongMaterial({color: 0x663399 });
+			var pos2D_sphere = new THREE.Mesh(pos2D_sphere_geometry, pos2D_sphere_material);
+			//var pos2D_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), 1, color);
+			var mom2D_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), 1, 0x00FF00, 1, 1);
+			var angmo_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0), 1, 0xffa500, 1, 1);
+
+			pos_axis = new THREE.Vector3(new_harmonic_osc2D["position"][0][0], new_harmonic_osc2D["position"][0][1], 
+										new_harmonic_osc2D["position"][0][2]);
+			pos_length = new_harmonic_osc2D["position"][1];
+			pos2D_sphere.position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+			//pos2D_arrow.setDirection(pos_axis);
+			//pos2D_arrow.setLength(pos_length);
+
+			mom_axis = new THREE.Vector3(new_harmonic_osc2D["momentum"][0][0], new_harmonic_osc2D["momentum"][0][1], 
+										new_harmonic_osc2D["momentum"][0][2]);
+			mom_length = new_harmonic_osc2D["momentum"][1];
+			mom2D_arrow.setDirection(mom_axis);
+			mom2D_arrow.setLength(mom_length);
+			mom2D_arrow.position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+
+			angmo_axis = new THREE.Vector3(new_harmonic_osc2D["angmo"][0][0], new_harmonic_osc2D["angmo"][0][1], 
+										new_harmonic_osc2D["angmo"][0][2]);
+			angmo_length = new_harmonic_osc2D["angmo"][1];
+			angmo_arrow.setDirection(angmo_axis);
+			angmo_arrow.setLength(angmo_length);
+			angmo_arrow.position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+
+			scene.add(pos2D_sphere);
+			//scene.add(pos2D_arrow);
+			scene.add(mom2D_arrow);
+			scene.add(angmo_arrow);
+			harmonic_osc2D["pos_sphere"] = pos2D_sphere;
+			//harmonic_osc2D["pos_arrow"] = pos2D_arrow;
+			harmonic_osc2D["mom_arrow"] = mom2D_arrow;
+			harmonic_osc2D["angmo_arrow"] = angmo_arrow
+		} else {
+			energy = new_harmonic_osc2D["energy"];
+			pos_axis = new THREE.Vector3(new_harmonic_osc2D["position"][0][0], new_harmonic_osc2D["position"][0][1], 
+										new_harmonic_osc2D["position"][0][2]);
+			pos_length = new_harmonic_osc2D["position"][1];
+			mom_axis = new THREE.Vector3(new_harmonic_osc2D["momentum"][0][0], new_harmonic_osc2D["momentum"][0][1], 
+										new_harmonic_osc2D["momentum"][0][2]);
+			mom_length = new_harmonic_osc2D["momentum"][1];
+			angmo_axis = new THREE.Vector3(new_harmonic_osc2D["angmo"][0][0], new_harmonic_osc2D["angmo"][0][1], 
+										new_harmonic_osc2D["angmo"][0][2]);
+			angmo_length = new_harmonic_osc2D["angmo"][1];
+
+			harmonic_osc2D["pos_sphere"].position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+			//harmonic_osc2D["pos_sphere"].material.color = color;
+			//harmonic_osc2D["pos_arrow"].setDirection(pos_axis);
+			//harmonic_osc2D["pos_arrow"].setLength(pos_length);
+			//harmonic_osc2D["pos_arrow"].setColor(color);
+			harmonic_osc2D["mom_arrow"].setDirection(mom_axis);
+			harmonic_osc2D["mom_arrow"].setLength(mom_length);
+			harmonic_osc2D["mom_arrow"].position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+			harmonic_osc2D["angmo_arrow"].setDirection(angmo_axis);
+			harmonic_osc2D["angmo_arrow"].setLength(angmo_length);
+			harmonic_osc2D["angmo_arrow"].position.set(pos_length*pos_axis.x, pos_length*pos_axis.y, pos_length*pos_axis.z);
+		}
+	}
+
+	// Update distinguishable skies
 	if (Object.keys(new_skies).length == 0) {
-		//console.log('hi');
 		for (var i in skies) {
 			for (j = 0; j < skies[i].length; ++j) {
 				scene.remove(skies[i][j]);
@@ -223,22 +336,16 @@ function render (response) {
 		skies = {};
 	}
 
-
+	// Update distinguishable pieces
 	if (new_piece_arrows.length == piece_arrows.length) {
 		for(i = 0; i < piece_arrows.length; ++i) {
-			axis = new THREE.Vector3(new_piece_arrows[i][0][0], new_piece_arrows[i][0][1], new_piece_arrows[i][0][2])
+			axis = new THREE.Vector3(new_piece_arrows[i][0][0], new_piece_arrows[i][0][1], 
+										new_piece_arrows[i][0][2])
 			length = new_piece_arrows[i][1];
-
 			piece_arrows[i].setDirection(axis);
 			piece_arrows[i].setLength(length);
-
 			piece_spheres[i].position.set(length*axis.x, length*axis.y, length*axis.z);
-
 			if (new_separability[i] == true) {
-				//piece_spheres[i].scale.x = 0;
-				//piece_spheres[i].scale.y = 0;
-				//piece_spheres[i].scale.z = 0;
-
 				if (i in skies) {
 					for (j = 0; j < skies[i].length; ++j) {
 						x = length*axis.x + new_skies[i][j][0]*0.1;
@@ -267,9 +374,6 @@ function render (response) {
 					}
 					delete skies[i];
 				}
-				//piece_spheres[i].scale.x = 1;
-				//piece_spheres[i].scale.y = 1;
-				//piece_spheres[i].scale.z = 1;
 			}
 		}
 	} else {
@@ -280,26 +384,25 @@ function render (response) {
 		piece_arrows = [];
 		piece_spheres = [];
 		for(i = 0; i < new_piece_arrows.length; ++i) {
-			axis = new THREE.Vector3(new_piece_arrows[i][0][0], new_piece_arrows[i][0][1], new_piece_arrows[i][0][2])
+			axis = new THREE.Vector3(new_piece_arrows[i][0][0], new_piece_arrows[i][0][1], 
+										new_piece_arrows[i][0][2])
 			length = new_piece_arrows[i][1];
 			color = Math.random() * 0xffffff
 			var arrow = new THREE.ArrowHelper(axis, new THREE.Vector3(0, 0, 0), length, color);
 			piece_arrows.push(arrow);
 			scene.add(arrow);
-
-
 			var density_geometry = new THREE.SphereGeometry(0.1, 32, 32);
 			var density_material = new THREE.MeshPhongMaterial({color: color});
 			var density = new THREE.Mesh(density_geometry, density_material);
 			density.position.set(length*axis.x, length*axis.y, length*axis.z);
 			piece_spheres.push(density);
 			scene.add(density);
-			//console.log(piece_spheres);
 		}
 	}
 
 	// Update spin axis arrow
-	spin_axis_arrow.setDirection(new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], new_spin_axis[0][2]));
+	spin_axis_arrow.setDirection(new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], 
+													new_spin_axis[0][2]));
 	spin_axis_arrow.setLength(new_spin_axis[1]);
 
 	// Update phase arrow
@@ -333,7 +436,8 @@ function render (response) {
 	// Update component stars
 	if (new_component_stars.length == component_stars.length) {
 		for(i = 0; i < component_stars.length; ++i) {
-			component_stars[i].position.set(new_component_stars[i][0], new_component_stars[i][1], new_component_stars[i][2]);
+			component_stars[i].position.set(new_component_stars[i][0], new_component_stars[i][1], 
+												new_component_stars[i][2]);
 		}
 	} else {
 		for(i = 0; i < component_stars.length; ++i) {
@@ -344,12 +448,14 @@ function render (response) {
 			var star_geometry = new THREE.SphereGeometry(0.1, 32, 32);
 			var star_material = new THREE.MeshPhongMaterial({color: 0xff0000});
 			var star = new THREE.Mesh(star_geometry, star_material);
-			star.position.set(new_component_stars[i][0], new_component_stars[i][1], new_component_stars[i][2]);
+			star.position.set(new_component_stars[i][0], new_component_stars[i][1], 
+								new_component_stars[i][2]);
 			component_stars.push(star);
 			scene.add(star);
 		}
 	}
 
+	// Update plane
 	if (new_plane_stars.length != 0 || new_component_plane_stars.length != 0) {
 		XY_plane.visible = true;
 	} else {
@@ -359,7 +465,8 @@ function render (response) {
 	// Update plane stars
 	if (new_plane_stars.length == plane_stars.length) {
 		for(i = 0; i < plane_stars.length; ++i) {
-			plane_stars[i].position.set(new_plane_stars[i][0], new_plane_stars[i][1], new_plane_stars[i][2]);
+			plane_stars[i].position.set(new_plane_stars[i][0], new_plane_stars[i][1], 
+											new_plane_stars[i][2]);
 
 			plane_arrows[i].geometry.vertices[1].x = new_plane_stars[i][0];
 			plane_arrows[i].geometry.vertices[1].y = new_plane_stars[i][1];
@@ -384,11 +491,11 @@ function render (response) {
 			star.position.set(new_plane_stars[i][0], new_plane_stars[i][1], new_plane_stars[i][2]);
 			plane_stars.push(star);
 			scene.add(star);
-
 			var arrow_geometry = new THREE.Geometry();
 			arrow_geometry.dynamic = true;
 			arrow_geometry.vertices.push(new THREE.Vector3(0,0,1));
-			arrow_geometry.vertices.push(new THREE.Vector3(new_plane_stars[i][0], new_plane_stars[i][1], new_plane_stars[i][2]));
+			arrow_geometry.vertices.push(new THREE.Vector3(new_plane_stars[i][0], new_plane_stars[i][1], 
+																new_plane_stars[i][2]));
 			arrow_geometry.vertices.push(new THREE.Vector3(new_stars[i][0], new_stars[i][1], new_stars[i][2]));
 			var arrow_material = new THREE.LineBasicMaterial({
 					color: 0xffffff,
@@ -397,7 +504,6 @@ function render (response) {
 			});
 			var arrow = new THREE.Line(arrow_geometry, arrow_material);
 			arrow.position.set(0,0,0);
-
 			plane_arrows.push(arrow);
 			scene.add(arrow);
 		}
@@ -406,16 +512,14 @@ function render (response) {
 	// Update component plane stars
 	if (new_component_plane_stars.length == component_plane_stars.length) {
 		for(i = 0; i < component_plane_stars.length; ++i) {
-			component_plane_stars[i].position.set(new_component_plane_stars[i][0], new_component_plane_stars[i][1], new_component_plane_stars[i][2]);
-
+			component_plane_stars[i].position.set(new_component_plane_stars[i][0], 
+				new_component_plane_stars[i][1], new_component_plane_stars[i][2]);
 			component_plane_arrows[i].geometry.vertices[1].x = new_component_plane_stars[i][0];
 			component_plane_arrows[i].geometry.vertices[1].y = new_component_plane_stars[i][1];
 			component_plane_arrows[i].geometry.vertices[1].z = new_component_plane_stars[i][2];
-
 			component_plane_arrows[i].geometry.vertices[2].x = new_component_stars[i][0];
 			component_plane_arrows[i].geometry.vertices[2].y = new_component_stars[i][1];
 			component_plane_arrows[i].geometry.vertices[2].z = new_component_stars[i][2];
-
 			component_plane_arrows[i].geometry.verticesNeedUpdate = true;
 		}
 	} else {
@@ -429,15 +533,18 @@ function render (response) {
 			var star_geometry = new THREE.SphereGeometry(0.05, 32, 32);
 			var star_material = new THREE.MeshPhongMaterial({color: 0xff0000});
 			var star = new THREE.Mesh(star_geometry, star_material);
-			star.position.set(new_component_plane_stars[i][0], new_component_plane_stars[i][1], new_component_plane_stars[i][2]);
+			star.position.set(new_component_plane_stars[i][0], new_component_plane_stars[i][1], 
+				new_component_plane_stars[i][2]);
 			component_plane_stars.push(star);
 			scene.add(star);
 
 			var arrow_geometry = new THREE.Geometry();
 			arrow_geometry.dynamic = true;
 			arrow_geometry.vertices.push(new THREE.Vector3(0,0,1));
-			arrow_geometry.vertices.push(new THREE.Vector3(new_component_plane_stars[i][0], new_component_plane_stars[i][1], new_component_plane_stars[i][2]));
-			arrow_geometry.vertices.push(new THREE.Vector3(new_component_stars[i][0], new_component_stars[i][1], new_component_stars[i][2]));
+			arrow_geometry.vertices.push(new THREE.Vector3(new_component_plane_stars[i][0], 
+				new_component_plane_stars[i][1], new_component_plane_stars[i][2]));
+			arrow_geometry.vertices.push(new THREE.Vector3(new_component_stars[i][0], 
+				new_component_stars[i][1], new_component_stars[i][2]));
 			var arrow_material = new THREE.LineBasicMaterial({
 					color: 0xff0000,
 					opacity: 0.9,
@@ -497,7 +604,7 @@ function render (response) {
 		document.getElementById("dt").innerHTML = new_dt.toFixed(4) + " ";
 	}	
 
-	// Update controls
+	// Update measurements
 	if (new_controls == "") {
 		control_pane = document.getElementById("controls");
 	    control_pane.style.display = "none";
