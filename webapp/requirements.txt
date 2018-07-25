@@ -1,8 +1,8 @@
+distribute
+wsgiref
 gunicorn
 Flask
 Jinja2
 Werkzeug
-distribute
-wsgiref
 python-socketio
 eventlet

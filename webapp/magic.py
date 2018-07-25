@@ -1,3 +1,4 @@
+import sys
 import math
 import cmath
 import mpmath
@@ -386,7 +387,7 @@ def spin_fockBASIS(j, m):
     return op*vacuum#, (n1, n2)
 
 def fock_spinBASIS(n1, n2):
-    j = (n1+n2)/2
+    j = (n1+n2)/2.
     m = n1-j
     return qt.spin_state(j, m)#, (j, m)
 
@@ -433,7 +434,7 @@ def coupling(a, b):
                         qt.tensor(qt.spin_state(a, a_i), qt.spin_state(b, b_j))
                     states.append(state)
             STATE = sum(states)
-            particle_dict[particle] = (qt.spin_state(0,0), STATE)
+            particle_dict[particle] = (qt.qt.spin_state(0,0), STATE)
         else:
             for c_m in np.arange(-1*particle, particle+1, 1):
                 states = []

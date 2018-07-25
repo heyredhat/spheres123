@@ -60,7 +60,9 @@ def animate():
                                     plane_component_stars=options["show_projection"]\
                                         and options["show_components"])
             husimi = sphere.husimi() if options["show_husimi"] else []
-            controls = sphere.pretty_measurements(harmonic1D=options["1d_harmonic_oscillator"], harmonic2D=options["2d_harmonic_oscillator"]) if options["show_measurements"] else ""
+            controls = sphere.pretty_measurements(harmonic1D=options["1d_harmonic_oscillator"],\
+                                                  harmonic2D=options["2d_harmonic_oscillator"])\
+                                                    if options["show_measurements"] else ""
 
             sym_arrows = sphere.sym_arrows() if options["symmetrical_selected"] != "sphere" else []
             piece_arrows = []
