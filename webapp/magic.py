@@ -16,6 +16,9 @@ import numpy as np
 def dim_spin(n):
     return (n-1.)/2.
 
+def spin_dim(s):
+    return 2*s + 1
+
 def factors(n):    
     return set(functools.reduce(list.__add__, 
                 ([i, n//i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)))
@@ -303,6 +306,13 @@ def separable(whole, dims, piece_index):
     else:
         return False
 
+def mixed_separable(part):
+    entropy = qt.entropy_vn(part) 
+    if entropy < 0.000001 and entropy > -0.999999:
+        return True
+    else:
+        return False
+
 def fuzzy(a, b):
     if a-b < 0.001 and a-b > -0.001:
         return True
@@ -413,7 +423,7 @@ def fock_spin(fock_state):
 
 ##################################################################################################################
 
-def coupling(a, b):
+def coupling_(a, b):
     particle_types = []
     for a_i in np.arange(-1*a, a+1, 1):
         for b_j in np.arange(-1*b, b+1, 1):
@@ -434,7 +444,7 @@ def coupling(a, b):
                         qt.tensor(qt.spin_state(a, a_i), qt.spin_state(b, b_j))
                     states.append(state)
             STATE = sum(states)
-            particle_dict[particle] = (qt.qt.spin_state(0,0), STATE)
+            particle_dict[particle] = (qt.spin_state(0,0), STATE)
         else:
             for c_m in np.arange(-1*particle, particle+1, 1):
                 states = []
@@ -447,3 +457,60 @@ def coupling(a, b):
                 particle_dict[c_m] = (qt.spin_state(particle, c_m), STATE)
         T[particle] = particle_dict
     return T
+
+def coupling(a, b):
+    STATES = []
+    GOTO = []
+    WHICH_IS = []
+    T = coupling_(a,b)
+    #print("PPP")
+    #print(T)
+    #print('DDDD')
+    for could_split_into in T.keys():
+        for of_eig in T[could_split_into].keys():
+            STATES.append(T[could_split_into][of_eig][1])
+            GOTO.append(T[could_split_into][of_eig][0])
+            WHICH_IS.append((could_split_into, of_eig))
+    #for i in range(len(STATES)):
+    #    print("%s ->\n\t%s\n\t\twhich is %s\n\n" % (STATES[i].full().T[0], GOTO[i].full().T[0], WHICH_IS[i]))
+    OPERATOR = qt.Qobj(np.array([state.full().T[0] for state in STATES]))
+    return OPERATOR, STATES, GOTO, WHICH_IS
+
+if __name__ == '__main__':
+    OPERATOR, STATES, GOTO, WHICH_IS = coupling(0.5, 0.5)
+
+    op = OPERATOR
+    ket = qt.tensor(qt.basis(2,0), qt.basis(2,1), qt.rand_ket(2))
+    #ket = qt.rand_ket(4)
+    ket.dims = [[8], [1]]
+    dm = ket.ptrace(0)
+    ket.dims = [[4,2], [1,1]]
+    dm.dims = [[4,2], [4,2]]
+    #dm = ket.ptrace(0)
+    #overlaps = [ket.overlap(state) for state in STATES]
+    #print("ket")
+    #print(ket)
+    ##print("dm")
+    #print(dm)
+    ##print("op")
+   # print(op)
+    #print("overlaps")
+    #print(overlaps)
+    #print("op on ket")
+   ## print(op*ket)
+    #print("op on dm")
+    #print(op*dm*op.dag())
+    #print("op on ket -> dm")
+    #print((op*ket).ptrace(0))
+
+    #ss = op*dm*op.dag()
+
+
+    states = []
+    for state in STATES:
+        s = qt.Qobj(state)
+        state.dims = [[4],[1]]
+        states.append(state)
+    projectors = [qt.tensor(state.ptrace(0), qt.identity(2)) for state in states]
+
+    #(projectors[0]*dm).tr()

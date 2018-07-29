@@ -116,6 +116,23 @@ function set_density_selected() {
 	}
 }
 
+function do_collide() {
+	spheresSocket.emit("collide", {"i": document.getElementById("collider").value});
+}
+
+function do_swap() {
+	spheresSocket.emit("swap", {"i": document.getElementById("swapper").value});
+}
+
+function do_create() {
+	spheresSocket.emit("create", {"": ''});
+}
+
+function do_split() {
+	spheresSocket.emit("split", {"a": document.getElementById("split1").value,
+							     "b": document.getElementById("split2").value});
+}
+
 /************************************************************************************************************/
 
 document.addEventListener("keypress", function (event) {
@@ -157,6 +174,17 @@ function render (response) {
 	var new_harmonic_osc1D = response["1d_harmonic_oscillator"];
 	var new_harmonic_osc2D = response["2d_harmonic_oscillator"];
 	var new_sym_arrows = response["sym_arrows"];
+	var new_others = response["others"];
+
+	// Update others pane
+	if (new_others == "") {
+    	others_pane = document.getElementById("others");
+    	others_pane.style.display = "none";
+	} else {
+		others_pane = document.getElementById("others");
+    	others_pane.style.display = "block";
+		document.getElementById("thrs").innerHTML = response["others"];
+	}
 
 	// Update arrows corresponding to symmetrical qubits
 	if (new_sym_arrows.length == 0) {

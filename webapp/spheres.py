@@ -5,694 +5,437 @@ import gellman
 import qutip as qt
 import numpy as np
 from magic import *
+from puresphere import *
+from mixedsphere import *
 
-class Sphere:
-    def __init__(self, state=None,\
-                       energy=None,\
-                       dt=0.01,\
-                       evolving=False,
-                       evolution="spin"):
-        self.state = state if state != None else qt.rand_ket(2)
-        self.energy = energy if energy != None else qt.rand_herm(self.n())
-        self.dt = dt
-        self.evolving = evolving
-        self.evolution = evolution
-        self.dimensionality = None
+class Spheres:
+    def __init__(self):
+        self.state = None
+        self.children = []
+        self.dims = []
 
-        self.precalc_stars = None
-        self.precalc_plane_stars = None
-        self.precalc_component_stars = None
-        self.precalc_plane_component_stars = None
-        self.precalc_polynomial = None
-        self.precalc_qubits = None
-        self.precalc_symmetrical = None
-        self.precalc_bases = None
-        self.precalc_paulis = None
-        self.precalc_energy_eigs = None
-        self.precalc_coherents = None
-        self.precalc_1Dfock = None
-        self.precalc_1Dops = None
-        self.precalc_2Dfock = None
-        self.precalc_2Dops = None
-        self.precalc_1Dstuff = None
-        self.precalc_2Dstuff = None
-        self.dim_change = False
+    def pretty_children(self, selected):
+        s = ""
+        for i, child in enumerate(self.children):
+            j = dim_spin(self.dims[i])
+            s += "     (%d) %.1f\n" % (i, j)
+        s += "     \t(this is %d)" % (self.children.index(selected))
+        return s
 
-##################################################################################################################
-
-    def n(self):
-        return self.state.shape[0]
-
-    def spin(self):
-        return (self.n()-1.)/2.
-
-    def spin_axis(self):
-        direction = np.array([qt.expect(self.paulis()[0][0], self.state),\
-                              -1*qt.expect(self.paulis()[0][1], self.state),\
-                              -1*qt.expect(self.paulis()[0][2], self.state)])
-        spin_squared = np.sqrt(np.sum(direction**2))
-        return [normalize(direction).tolist(), spin_squared]
-
-    def phase(self):
-        vec = self.state.full().T[0]
-        p = np.exp(1j*np.angle(np.sum(vec)))
-        return [p.real, p.imag]
-
-    def paulis(self, reset=False):
-        if self.precalc_paulis == None or reset == True:
-            ops = qt.jmat(self.spin())
-            eigs = [op.eigenstates() for op in ops]
-            self.precalc_paulis = [ops, eigs]
-        return self.precalc_paulis
-
-    def eigenenergies(self, reset=False):
-        if self.precalc_energy_eigs == None and self.energy != None or reset == True:
-            self.precalc_energy_eigs = self.energy.eigenstates()
-        return self.precalc_energy_eigs
-
-    def hermitian_bases(self, reset=False):
-        if self.precalc_bases == None or reset == True:
-            self.precalc_bases = [[qt.Qobj(basis), qt.Qobj(basis).eigenstates()]\
-                for basis in gellman.get_basis(self.n())]
-        return self.precalc_bases
-
-    def hermitian_basis(self):
-        bases = self.hermitian_bases()
-        vector = [qt.expect(basis[0], self.state) for basis in bases]
-        return vector, bases
-   
-    def coherent_states(self, N=25, reset=False):
-        if self.precalc_coherents == None or reset == True or self.dim_change == True:
-            theta = np.linspace(0, math.pi, N)
-            phi = np.linspace(0, 2*math.pi, N)
-            THETA, PHI = np.meshgrid(theta, phi)
-            self.precalc_coherents = [[qt.spin_coherent(self.spin(), THETA[i][j], PHI[i][j])\
-                            for j in range(N)] for i in range(N)], THETA, PHI
-            self.dim_change = False
-        return self.precalc_coherents 
-
-    def husimi(self):
-        N = 25
-        coherents, THETA, PHI = self.coherent_states(N=N)
-        Q = np.zeros_like(THETA)
-        for i in range(N):
-            for j in range(N):
-                amplitude = self.state.overlap(coherents[i][j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                Q[-1*i][-1*j] = probability
-        pts = []
-        for i, j, k in zip(Q, THETA, PHI):
-            for q, t, p in zip(i, j, k):
-                pts.append([q, sph_xyz(t, p)])
-        return pts
-
-    def husimi_old(self):
-        N = 25
-        theta = np.linspace(0, math.pi, N)
-        phi = np.linspace(0, 2*math.pi, N)
-        Q, THETA, PHI = qt.spin_q_function(self.state, theta, phi)
-        pts = []
-        for i, j, k in zip(Q, THETA, PHI):
-            for q, t, p in zip(i, j, k):
-                pts.append([q, sph_xyz(t, p)])
-        return pts
-
-    def stars(self, reset=False):
-        if self.precalc_stars == None or reset == True:
-            self.precalc_stars = q_SurfaceXYZ(self.state)
-        return self.precalc_stars
-
-    def plane_stars(self, reset=False):
-        if self.precalc_plane_stars == None or reset == True:
-            C = v_C(self.state.full().T[0])
-            xyz = []
-            for c in C:
-                if c == float('Inf'):
-                    xyz.append([1000,1000,0])
-                else:
-                    xyz.append([c.real, c.imag, 0])
-            self.precalc_plane_stars = xyz
-        return self.precalc_plane_stars
-            
-    def component_stars(self, reset=False):
-        if self.precalc_component_stars == None or reset == True:
-            self.precalc_component_stars = [c_xyz(c) for c in self.polynomial()]
-        return self.precalc_component_stars
-
-    def plane_component_stars(self, reset=False):
-        if self.precalc_plane_component_stars == None or reset == True:
-            C = self.polynomial()
-            self.precalc_plane_component_stars = [[c.real, c.imag, 0] for c in C] 
-        return self.precalc_plane_component_stars 
-
-    def polynomial(self, reset=False):
-        if self.precalc_polynomial == None or reset == True:
-            self.precalc_polynomial = v_polynomial(self.state.full().T[0])
-        return self.precalc_polynomial
-
-    def qubits(self, reset=False):
-        if self.precalc_qubits == None or reset == True:
-            self.precalc_qubits = [SurfaceXYZ_q([xyz]) for xyz in self.stars()]
-        return self.precalc_qubits
-
-    def symmetrical(self, reset=False):
-        if self.precalc_symmetrical == None or reset == True:
-            self.precalc_symmetrical = symmeterize(self.qubits())
-        return self.precalc_symmetrical
-
-    def allstars(self, stars=True, plane_stars=True, component_stars=True, plane_component_stars=True):
-        stuff = {}
-        polynomial = v_polynomial(self.state.full().T[0])
-        stuff["component_stars"] = [c_xyz(c) for c in polynomial] if component_stars else []
-        stuff["plane_component_stars"] = [[c.real, c.imag, 0] for c in polynomial] if plane_component_stars else []
-        if stars or plane_stars:
-            roots = polynomial_C(polynomial) 
-            if plane_stars:
-                planeStars = []
-                for c in roots:
-                    if c == float('Inf'):
-                        planeStars.append([1000,1000,0])
-                    else:
-                        planeStars.append([c.real, c.imag, 0])
-                stuff["plane_stars"] = planeStars
-            else:
-                stuff["plane_stars"] = []
-            stuff["stars"] = [c_xyz(c) for c in roots] if stars else []
-        self.precalc_stars = stuff["stars"] 
-        self.precalc_plane_stars = stuff["plane_stars"]
-        self.precalc_component_stars = stuff["component_stars"]
-        self.precalc_plane_component_stars = stuff["plane_component_stars"]  
-        self.precalc_polynomial = polynomial  
-        self.precalc_qubits = None     
-        self.precalc_symmetrical = None       
-        return stuff
-
-    def sym_arrows(self):
-        symmeterized = self.symmetrical().copy()
-        symmeterized.dims = [[2]*(self.n()-1),[1]*(self.n()-1)]
-        sym_bits = [symmeterized.ptrace(i) for i in range(self.n()-1)]
-        return [xyz_radial([qt.expect(qt.sigmax(), bit),\
-                            -1*qt.expect(qt.sigmay(), bit),\
-                            -1*qt.expect(qt.sigmaz(), bit)]) for bit in sym_bits]
-
-    def distinguishable_pieces(self):
-        if self.dimensionality != None:
-            state_copy = self.state.copy()
-            state_copy.dims = [self.dimensionality, [1]*len(self.dimensionality)]
-            sys.stdout.flush() 
-            pieces = [state_copy.ptrace(i) for i in range(len(self.dimensionality))]
-            return pieces
+    def add_child(self, child_state):
+        child_state.dims = [[child_state.shape[0]],[1]]
+        if self.state == None:
+            self.state = child_state
         else:
+            self.state = qt.tensor(self.state, child_state)
+        self.dims.append(child_state.shape[0])
+        self.children.append(MixedSphere(parent=self, energy=qt.rand_herm(child_state.shape[0]),\
+                                            dt=0.001, evolving=False))
+        self.children[-1].refresh()
+        return self.children[-1]
+
+    def update_child(self, child, new_state):
+        #print("ha")
+        if self.is_separable(child):
+            if len(self.children) == 1:
+                #print("hek")
+                #print(self.state)
+                #print(new_state)
+                self.state = new_state
+                self.dims = new_state.dims[0]
+                self.state.dims = [self.dims, [1]*len(self.dims)]
+                #print(self.dims)
+            else:
+                temp_state = self.state.copy()
+                i = self.children.index(child)
+                temp_state = qt.tensor_swap(temp_state, (i, 0))
+                temp_state = density_to_purevec(temp_state.ptrace(list(range(1,len(self.dims)))))
+                temp_state = qt.tensor(new_state, temp_state)
+                temp_state = qt.tensor_swap(temp_state, (0, i))
+                self.state = temp_state
+                self.dims[i] = new_state.shape[0]
+                self.state.dims = [self.dims, [1]*len(self.dims)]
+                #print('hi')
+                #print(self.state)
+                #print(self.dims)
+            child.refresh()
+
+    def remove_child(self, child_sphere):
+        if len(self.children) == 0:
+            return
+        elif len(self.children) == 1:
+            child_sphere.state = self.state
+            self.children = []
+            self.dims = []
+            self.state = None
+            child_sphere.refresh()
+        else:
+            if self.is_separable(child_sphere):
+                pure_sphere = PureSphere(state=density_to_purevec(child_sphere.state),\
+                                         energy=child_sphere.energy,\
+                                         dt=child_sphere.dt,\
+                                         evolving=child_sphere.evolving)
+                pure_sphere.dimensionality = child_sphere.dimensionality
+                temp_state = density_to_purevec(self.other_state(child_sphere))
+                i = self.children.index(child_sphere)
+                del self.children[i]
+                del self.dims[i]
+                self.state = temp_state
+                return pure_sphere
+
+    def is_separable(self, child_sphere):
+        return mixed_separable(self.child_state(child_sphere))
+
+    def child_state(self, child_sphere):
+        if len(self.children) == 1:
             return self.state.ptrace(0)
-
-    def dist_pieces_spin(self, pieces):
-        arrows = []
-        for piece in pieces:
-            j = dim_spin(piece.shape[0]) 
-            direction = np.array([qt.expect(qt.jmat(j, "x"), piece).real,\
-                                  -1*qt.expect(qt.jmat(j, "y"), piece).real,\
-                                  -1*qt.expect(qt.jmat(j, "z"), piece).real])
-            spin_squared = np.sqrt(np.sum(direction**2))
-            arrows.append([normalize(direction).tolist(), spin_squared])
-        return arrows
-
-    def are_separable(self, pieces):
-        seps = []
-        for piece in pieces:
-            entropy = qt.entropy_vn(piece) 
-            if entropy < 0.001 and entropy > -0.001:
-                seps.append(True)
-            else:
-                seps.append(False)
-        return seps
-
-    def separable_skies(self, pieces, are_separable):
-        skies = {}
-        for i in range(len(pieces)):
-            if are_separable[i] == True:
-                q = density_to_purevec(pieces[i])
-                skies[i] = q_SurfaceXYZ(q)
-        return skies
-
-##################################################################################################################
-
-    def refresh(self):
-        self.hermitian_bases(reset=True)
-        self.paulis(reset=True)
-        self.eigenenergies(reset=True)
-        self.dim_change = True
-        self.precalc_stars = None
-        self.precalc_plane_stars = None
-        self.precalc_component_stars = None
-        self.precalc_plane_component_stars = None
-        self.precalc_polynomial = None
-        self.precalc_qubits = None
-        self.precalc_symmetrical = None
-        self.precalc_bases = None
-        self.precalc_paulis = None
-        self.precalc_energy_eigs = None
-        self.precalc_coherents = None
-        self.precalc_1Dfock = None
-        self.precalc_1Dops = None
-        self.precalc_2Dfock = None
-        self.precalc_2Dops = None
-        self.precalc_1Dstuff = None
-        self.precalc_2Dstuff = None
-
-    def create_star(self):
-        xyz = q_SurfaceXYZ(qt.rand_ket(2))
-        self.state = SurfaceXYZ_q(self.stars() + xyz).unit()
-        self.energy = qt.rand_herm(self.n())
-        self.refresh()
-        self.dimensionality = None
-
-    def destroy_star(self):
-        if self.n() > 2:
-            self.state = SurfaceXYZ_q(self.stars()[1:]).unit()
-            self.energy = qt.rand_herm(self.n())
-            self.refresh()
-            self.dimensionality = None
-
-    def random_state(self):
-        self.state = qt.rand_ket(self.n())
-        self.precalc_1Dfock = None
-        self.precalc_1Dops = None
-        self.precalc_2Dfock = None
-        self.precalc_2Dops = None
-        self.precalc_qubits = None
-        self.precalc_symmetrical = None
-        self.precalc_polynomial = None
-        self.precalc_stars = None
-        self.precalc_plane_stars = None
-        self.precalc_component_stars = None
-        self.precalc_plane_component_stars = None
-        self.precalc_1Dstuff = None
-        self.precalc_2Dstuff = None
-
-    def random_energy(self):
-        self.energy = qt.rand_herm(self.n())
-        self.eigenenergies(reset=True)
-    
-    def evolve(self, operator, dt=None, inverse=False):
-        if dt == None:
-            dt = self.dt
-        unitary = (-2*math.pi*1j*operator*dt).expm()
-        if inverse:
-            unitary = unitary.dag()
-        self.state = unitary*self.state
-
-##################################################################################################################
-
-    def rotate(self, pole, inverse=False):
-        if pole == "x":
-            self.evolve(self.paulis()[0][0], dt=self.dt, inverse=inverse)
-        elif pole == "y":
-            self.evolve(self.paulis()[0][1], dt=self.dt, inverse=inverse)
-        elif pole == "z":
-            self.evolve(self.paulis()[0][2], dt=self.dt, inverse=inverse)
-        self.refresh()
-
-    def rotate_star(self, index, pole, dt=0.01, inverse=False):
-        roots = self.stars()
-        root = roots[index]
-        root_state = SurfaceXYZ_q([root])
-        root_state = evolver(root_state, qt.jmat(0.5, pole), dt=self.dt, inverse=inverse)
-        new_xyz = q_SurfaceXYZ(root_state)[0]
-        roots[index] = new_xyz
-        self.state = SurfaceXYZ_q(roots)
-        self.refresh()
-
-    def rotate_component(self, index, pole, dt=0.01, inverse=False, unitary=True):
-        polynomial = self.polynomial()
-        component = polynomial[index]
-        component_xyz = c_xyz(component)
-        component_state = SurfaceXYZ_q([component_xyz])
-        component_state = evolver(component_state, qt.jmat(0.5, pole), dt=self.dt, inverse=inverse)
-        new_xyz = q_SurfaceXYZ(component_state)[0]
-        new_component = xyz_c(new_xyz)
-        if (new_component != float('Inf')):
-            polynomial[index] = new_component
         else:
-            return self.state
-        new_vector = polynomial_v(polynomial)
-        if unitary:
-            self.state = qt.Qobj(new_vector).unit()
-        else:
-            self.state = qt.Qobj(new_vector)
-        self.refresh()
-    
-    def rotate_symmetrical(self, direction, i, dt, inverse=False):
-        sym = self.symmetrical()
-        op = None
-        if direction == "x":
-            op = 0.5*qt.sigmax()
-        elif direction == "y":
-            op = 0.5*qt.sigmay()
-        elif direction == "z":
-            op = 0.5*qt.sigmaz()
-        total_op = op if i == 0 else qt.identity(2)
-        for j in range(1, self.n()-1):
-            if j == i:
-                total_op = qt.tensor(total_op, op)
-            else:
-                total_op = qt.tensor(total_op, qt.identity(2))
-        total_op.dims = [[(2**(self.n()-1))], [2**(self.n()-1)]]
-        sym2 = evolver(sym, total_op, dt=dt, inverse=inverse)
-        self.state = unsymmeterize(sym2)
-        self.refresh()
+            if child_sphere in self.children:
+                i = self.children.index(child_sphere)
+                return self.state.ptrace(i)
 
-    def rotate_distinguishable(self, i, direction, dt=0.01, inverse=False):
-        if self.dimensionality != None:
-            j = dim_spin(self.dimensionality[i])
-            op = qt.jmat(j, direction)
-            total_op = op if i == 0 else qt.identity(self.dimensionality[0])
-            for j in range(1, len(self.dimensionality)):
-                if j == i:
-                    total_op = qt.tensor(total_op, op)
+    def other_state(self, child_sphere):
+        if child_sphere in self.children:
+            i = self.children.index(child_sphere)
+            keep = list(range(len(self.children)))
+            keep.remove(i)
+            return self.state.ptrace(keep)
+
+    def children_state(self, children):
+        indices = []
+        for child in children:
+            if child not in self.children:
+                return
+            else:
+                indices.append(self.children.index(child))
+        return self.state.ptrace(indices)
+
+    def other_children_state(self, children):
+        if len(children) == len(self.children):
+            return
+        else:
+            indices = []
+            for child in children:
+                if child not in self.children:
+                    return
                 else:
-                    total_op = qt.tensor(total_op, qt.identity(self.dimensionality[j]))
-            total_op.dims = [[self.n()], [self.n()]]
-            self.state = evolver(self.state, total_op, dt=dt, inverse=inverse)
-            self.refresh()
+                    indices.append(self.children.index(child))
+            everyone_else = list(range(len(self.children)))
+            everyone_else = [i for j, i in enumerate(everyone_else) if j not in indices]
+            return self.state.ptrace(everyone_else)
 
-    def mink_rotate(self, direction, angle, inverse=False):
-        self.state = mink_rotate_qubits(self.qubits(), direction, dt=angle, inverse=inverse)
-        self.refresh()
+    def upgrade_operator(self, child_sphere, operator):
+        if child_sphere in self.children:
+            i = self.children.index(child_sphere)
+            op = operator if i == 0 else qt.identity(self.dims[0])
+            for j in range(1, len(self.children)):
+                op = qt.tensor(op, operator) if j == i else qt.tensor(op, qt.identity(self.dims[j]))
+            return op
 
-    def boost(self, direction, rapidity, inverse=False):
-        if inverse == False:
-            inverse = True
-        else:
-            inverse = False
-        self.state = mink_boost_qubits(self.qubits(), direction, dt=rapidity, inverse=inverse)
-        self.refresh()
+    def evolve_child(self, child_sphere, operator, dt=0.01, inverse=False):
+        if child_sphere in self.children:
+            print("operator")
+            print(operator)
+            op = self.upgrade_operator(child_sphere, operator) if len(self.children) > 1 else operator
+            print("op")
+            print(op)
+            unitary = (-2*math.pi*1j*op*dt).expm()
+            if inverse:
+                unitary = unitary.dag()
+            cp = self.state.copy()
+            cp.dims = [self.dims, [1]*len(self.dims)]
+            unitary.dims = [self.dims, self.dims]
+            print("(")
+            print(unitary)
+            print(cp)
+            print(")")
+            cp = unitary*cp
+            self.state = cp
 
-##################################################################################################################
+            child_sphere.refresh()
 
-    def collapse(self, operator):
-        L, V = operator.eigenstates()
-        amplitudes = [self.state.overlap(v) for v in V]
-        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
-        probabilities = probabilities/probabilities.sum()
-        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        try:
-            vec = V[pick].full().T[0]
-            projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
-            self.state = (projector*self.state).unit()
-            self.refresh()
-            return pick, L, probabilities
-        except Exception as e:
-            print("collapse error!: %s " % e)
-            sys.stdout.flush() 
-
-    def symmetrical_collapse(self, direction, i):
-        sym = self.symmetrical()
-        op = None
-        if direction == "x":
-            op = 0.5*qt.sigmax()
-        elif direction == "y":
-            op = 0.5*qt.sigmay()
-        elif direction == "z":
-            op = 0.5*qt.sigmaz()
-        elif direction == "r":
-            op = qt.rand_herm(2)
-        total_op = op if i == 0 else qt.identity(2)
-        for j in range(1, self.n()-1):
-            if j == i:
-                total_op = qt.tensor(total_op, op)
-            else:
-                total_op = qt.tensor(total_op, qt.identity(2))
-        total_op.dims = [[(2**(self.n()-1))], [2**(self.n()-1)]]
-        L, V = total_op.eigenstates()
-        amplitudes = [sym.overlap(v) for v in V]
-        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
-        probabilities = probabilities/probabilities.sum()
-        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        vec = V[pick].full().T[0]
-        projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
-        sym = (projector*sym).unit()
-        self.state = unsymmeterize(sym)
-        self.refresh()
-
-    def distinguishable_collapse(self, i, direction):
-        if self.dimensionality != None:
-            j = dim_spin(self.dimensionality[i])
-            op = None
-            if direction == "x" or direction == "y" or direction == "z":
-                op = qt.jmat(j, direction)
-            elif direction == "r":
-                op = qt.rand_herm(self.dimensionality[i])
-            total_op = op if i == 0 else qt.identity(self.dimensionality[0])
-            for j in range(1, len(self.dimensionality)):
-                if j == i:
-                    total_op = qt.tensor(total_op, op)
-                else:
-                    total_op = qt.tensor(total_op, qt.identity(self.dimensionality[j]))
-            total_op.dims = [[self.n()], [self.n()]]
-            L, V = total_op.eigenstates()
+    def collapse_child(self, child_sphere, operator):
+        if child_sphere in self.children:
+            op = self.upgrade_operator(child_sphere, operator) if len(self.children) > 1 else operator
+            L, V = op.eigenstates()
             amplitudes = [self.state.overlap(v) for v in V]
             probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
             probabilities = probabilities/probabilities.sum()
             pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
             vec = V[pick].full().T[0]
             projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
+            projector.dims = [self.dims, self.dims]
             self.state = (projector*self.state).unit()
-            self.refresh()
+            child_sphere.refresh()
 
-##################################################################################################################
+    def collide_children(self, a, b):
+        if a in self.children and b in self.children:
+            print("state:\n%s" % self.state)
 
-    def harmonic_oscillator_1D(self):
-        fock = symmeterize(q_qubits(self.state))
-        self.precalc_1Dfock = fock
-        ops = construct_1dfock_operators(fock.shape[0])
-        self.precalc_1Dops = ops
-        stuff = {}
-        stuff["position"] = xyz_radial([qt.expect(ops["position"], fock), 0, 0])
-        stuff["momentum"] = xyz_radial([qt.expect(ops["momentum"], fock), 0, 0])
-        stuff["number"] = qt.expect(ops["number"], fock)
-        stuff["energy"] = qt.expect(ops["energy"], fock)
-        self.precalc_1Dstuff = stuff
-        return stuff
+            ai = self.children.index(a)
+            bi = self.children.index(b)
 
-    def fock1D(self):
-        if self.precalc_1Dstuff == None:
-            self.precalc1Dstuff = self.harmonic_oscillator_1D()
-        stuff = self.precalc_1Dstuff
-        if self.precalc_1Dfock == None:
-            self.precalc_1Dfock = self.symmetrical()
-        fock = self.precalc_1Dfock
-        if self.precalc_1Dops == None:
-            self.precalc_1Dops = construct_1dfock_operators(fock.shape[0])
-        ops = self.precalc_1Dops
-        return (fock, ops, stuff)
+            print("child index ai %d" % ai)
+            print("child index bi %d" % bi)
 
-    def harmonic_oscillator_1D_evolve(self, dt=0.01):
-        if self.precalc_1Dfock == None:
-            self.precalc_1Dfock = self.symmetrical()
-        fock = self.precalc_1Dfock
-        if self.precalc_1Dops == None:
-            self.precalc_1Dops = construct_1dfock_operators(fock.shape[0])
-        ops = self.precalc_1Dops
-        unitary = (-2*math.pi*1j*ops["energy"]*self.dt*0.1).expm()
-        fock = unitary*fock
-        self.state = unsymmeterize(fock)
-        self.refresh()
+            temp_state = self.state.copy()
+            temp_state = qt.tensor_swap(temp_state, (ai, 0))
+            temp_state = qt.tensor_swap(temp_state, (bi, 1))
 
-    def harmonic_oscillator_1D_collapse(self, kind):
-        if self.precalc_1Dfock == None:
-            self.precalc_1Dfock = self.symmetrical()
-        fock = self.precalc_1Dfock
-        if self.precalc_1Dops == None:
-            self.precalc_1Dops = construct_1dfock_operators(fock.shape[0])
-        ops = self.precalc_1Dops
-        L, V = ops[kind].eigenstates()
-        amplitudes = [fock.overlap(v) for v in V]
-        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
-        probabilities = probabilities/probabilities.sum()
-        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        vec = V[pick].full().T[0]
-        projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
-        self.state = unsymmeterize((projector*fock).unit())
-        self.refresh()
+            print("swapped state\n%s" % temp_state)
 
-    def harmonic_oscillator_2D(self):
-        fock = spin_fock(self.state)
-        self.precalc_2Dfock = fock
-        ops = construct_2dfock_operators(self.n())
-        self.precalc_2Dops = ops
-        stuff = {}
-        stuff["position"] = xyz_radial([qt.expect(ops["X"]["position"], fock),\
-                                        qt.expect(ops["Y"]["position"], fock),\
-                                        0])
-        stuff["momentum"] = xyz_radial([qt.expect(ops["X"]["momentum"], fock),\
-                                        qt.expect(ops["Y"]["momentum"], fock),\
-                                        0])
-        stuff["angmo"] = xyz_radial([qt.expect(ops["Jx"], fock),\
-                                     qt.expect(ops["Jy"], fock),\
-                                     qt.expect(ops["Jz"], fock)])
-        stuff["number"] = [qt.expect(ops["X"]["number"], fock),\
-                           qt.expect(ops["Y"]["number"], fock)]
-        stuff["energy"] = qt.expect(ops["T"], fock)
-        self.precalc_2Dstuff = stuff
-        return stuff
+            temp_dims = self.dims[:]
+            temp_dims[0], temp_dims[ai] = temp_dims[ai], temp_dims[0]
+            temp_dims[1], temp_dims[bi] = temp_dims[bi], temp_dims[1]
 
-    def fock2D(self):
-        if self.precalc_2Dstuff == None:
-            self.precalc2Dstuff = self.harmonic_oscillator_2D()
-        stuff = self.precalc_2Dstuff
-        if self.precalc_2Dfock == None:
-            self.precalc_2Dfock = spin_fock(self.state)
-        fock = self.precalc_2Dfock
-        if self.precalc_2Dops == None:
-            self.precalc_2Dops = construct_2dfock_operators(self.n())
-        ops = self.precalc_2Dops
-        return (fock, ops, stuff)
+            print("swapped dims %s" % temp_dims)
 
-    def harmonic_oscillator_2D_evolve(self, dt=0.01):
-        if self.precalc_2Dfock == None:
-            self.precalc_2Dfock = spin_fock(self.state)
-        fock = self.precalc_2Dfock
-        if self.precalc_2Dops == None:
-            self.precalc_2Dops = construct_2dfock_operators(self.n())
-        ops = self.precalc_2Dops
-        unitary = (-2*math.pi*1j*ops["T"]*self.dt*0.1).expm()
-        fock = unitary*fock
-        fock.dims = [[fock.shape[0]], [1]]
-        self.state = fock_spin(fock)
-        self.refresh()
+            AA = self.child_state(a)
+            spinA = (AA.shape[0]-1)/2.
+            BB = self.child_state(b)
+            spinB = (BB.shape[0]-1)/2.
 
-    def harmonic_oscillator_2D_collapse(self, kind):
-        if self.precalc_2Dfock == None:
-            self.precalc_2Dfock = spin_fock(self.state)
-        fock = self.precalc_2Dfock
-        if self.precalc_2Dops == None:
-            self.precalc_2Dops = construct_2dfock_operators(self.n())
-        ops = self.precalc_2Dops
-        L, V = ops[kind].eigenstates()
-        amplitudes = [fock.overlap(v) for v in V]
-        probabilities = np.array([(a*np.conjugate(a)).real for a in amplitudes])
-        probabilities = probabilities/probabilities.sum()
-        pick = np.random.choice(list(range(len(V))), 1, p=probabilities)[0]
-        vec = V[pick].full().T[0]
-        projector = qt.Qobj(np.outer(vec,np.conjugate(vec)))
-        self.state = fock_spin((projector*fock).unit())
-        self.refresh()
+            print("spinA %f" % spinA)
+            print("spinB %f" % spinB)
 
-##################################################################################################################
+            OPERATOR, STATES, GOTO, WHICH_IS = coupling(spinA, spinB)
 
-    def pretty_state(self):
-        vec = self.state.full().T[0]
-        s = np.array_str(vec, max_line_width=500, precision=2, suppress_small=True) + " aka<br />"
-        s += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[" + " ".join(["%.2f^%.2f" %\
-            (abs(c), cmath.phase(c)) for c in self.state.full().T[0]]) + "]"
-        return s
+            print("coupling")
+            print("operator")
+            print(OPERATOR)
+            print("which_is %s" % WHICH_IS)
 
-    def pretty_measurements(self, harmonic1D=False, harmonic2D=False):
-        s = ""
-        ops, eigs = self.paulis()
-        signs = ["X", "Y", "Z"]
-        for i in range(len(ops)):
-            op = ops[i]
-            L, V = eigs[i]
-            s += "     %s '%d': %.2f\n" % (signs[i], i+1, qt.expect(op, self.state))
-            for j in range(len(V)):
-                amplitude = self.state.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "\t%.2f\t%.2f%%\n" % (L[j], probability*100)
-        s += "     H '4': %.2f (energy)\n" % (qt.expect(self.energy, self.state))
-        L, V = self.eigenenergies()
-        for j in range(len(V)):
-            amplitude = self.state.overlap(V[j])
-            probability = (amplitude*np.conjugate(amplitude)).real
-            s += "\t%.2f\t%.2f%%\n" % (L[j], probability*100)
-        s += "     R '5' (random)\n"
-        if harmonic1D:
-            fock, ops, stuff = self.fock1D()
-            s += "   -------------------------------\n"
-            s += "\n     1d harmonic oscillator:\n"
-            s += "      position '6':\n"
-            L, V = ops["position"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      momentum '7':\n"
-            L, V = ops["momentum"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      number '8': %.2f\n" % stuff["number"]
-            L, V = ops["number"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      energy '9': %.2f\n" % stuff["energy"]
-            L, V = ops["energy"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-        if harmonic2D:
-            s += "   -------------------------------\n"
-            fock, ops, stuff = self.fock2D()
-            s += "\n     2d harmonic oscillator:\n"
-            s += "      X position:\n"
-            L, V = ops["X"]["position"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      Y position:\n"
-            L, V = ops["Y"]["position"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      X momentum:\n"
-            L, V = ops["X"]["momentum"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      Y momentum:\n"
-            L, V = ops["Y"]["momentum"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      number in x: %.2f\n" % stuff["number"][0]
-            L, V = ops["X"]["number"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      number in y: %.2f\n" % stuff["number"][1]
-            L, V = ops["Y"]["number"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-            s += "      energy: %.2f\n" % stuff["energy"]
-            L, V = ops["T"].eigenstates()
-            for j in range(len(V)):
-                amplitude = fock.overlap(V[j])
-                probability = (amplitude*np.conjugate(amplitude)).real
-                s += "     \t%.2f\t%.2f%%\n" % (L[j], probability*100)
-        return s
+            boundaries = [0]
+            boundaries_are = [WHICH_IS[0][0]]
+            last_which = WHICH_IS[0][0]
+            for i in range(len(WHICH_IS)):
+                if WHICH_IS[i][0] != last_which:
+                    boundaries.append(i)
+                    boundaries_are.append(WHICH_IS[i][0])
+                last_which = WHICH_IS[i][0]
 
-    def pretty_hermitian_basis(self):
-        vector, bases = self.hermitian_basis()
-        s = ""
-        for i in range(len(bases)):
-            s += "  %d: %.3f\n" % (i, vector[i])
-            basis = bases[i][0]
-            L, V = bases[i][1]
-            for j in range(len(V)):
-                l = L[j]
-                v = V[j]
-                inner = self.state.overlap(v)
-                s += "\t%.2f : %s | %.2f\n" % (L[j].real,'({0.real:.2f} + {0.imag:.2f}i)'.format(inner),\
-                    (inner*np.conjugate(inner)).real)
-        return s[:-1]
+            print("boundaries %s" % boundaries)
+            print("boundaries are %s" % boundaries_are)
+
+            print("{")
+            print(temp_dims)
+            for state in STATES:
+                state.dims = [[state.shape[0]], [1]]
+            print(spinA)
+            print(spinB)
+            print(STATES)
+            projectors = [qt.Qobj(state).ptrace(0) for state in STATES]
+            print(projectors)
+            upgraded_projectors = []
+            for i in range(len(STATES)):
+                total_op = projectors[i]
+                for j in range(2, len(self.children)):
+                    total_op = qt.tensor(total_op, qt.identity(temp_dims[j]))
+                total_op.dims = [[total_op.shape[0]], [total_op.shape[0]]]
+                upgraded_projectors.append(total_op)
+            print(upgraded_projectors)
+            print("}")
+            print("projectors")
+            print(upgraded_projectors)
+
+            temp_state.dims = [[temp_state.shape[0]], [1]]
+            temp_dm = temp_state.ptrace(0)
+            temp_state.dims = [temp_dims, [1]*len(temp_dims)]
+            temp_dm.dims = [[temp_dm.shape[0]], [temp_dm.shape[0]]]
+            print("(")
+            print(upgraded_projectors[0].dims)
+            print(temp_dm.dims)
+            print(")")
+            probabilities = [(proj*temp_dm).tr().real for proj in upgraded_projectors]
+
+            print("which_is %s" % WHICH_IS)
+            print("probabilities %s" % probabilities )
+            print(probabilities)
+
+            for i in range(len(WHICH_IS)):
+                j, m = WHICH_IS[i]
+                if j == 0: # No spin-0 for now
+                    probabilities[i] = 0
+
+            probabilities = np.array(probabilities)
+            probabilities = probabilities/probabilities.sum()
+
+            j_probs = []
+            for i, b in enumerate(boundaries):
+                if i == len(boundaries)-1:
+                    j_probs.append(sum(probabilities[b:]))
+                else:
+                    j_probs.append(sum(probabilities[b:boundaries[i+1]]))
+
+            print("reformed probabilities over j's")
+            print(j_probs)
+
+            pick = np.random.choice(list(range(len(j_probs))), 1, p=j_probs)[0]
+
+            print("pick %d" % pick)
+
+            cutA = int(boundaries[pick])
+            cutB = int(cutA + boundaries_are[pick]*2 + 1)
+
+            print("cutting from %d to %d of %s" % (cutA, cutB, WHICH_IS))
+
+            REFHALF = STATES[cutA:cutB]
+            ONE = STATES[:cutA]
+            TWO = STATES[cutB:]
+            STATES = np.array(ONE+TWO+REFHALF)
+
+            print("len(ONE)=%d + len(TWO)=%d + len(REFHALF)=%d = %d" % (len(ONE), len(TWO), len(REFHALF), len(STATES)))
+
+            beginna = int(len(ONE+TWO)*np.prod(temp_dims[2:]))
+            print("cutting from %d" % beginna)
+
+            GREFHALF = GOTO[cutA:cutB]
+            GONE = GOTO[:cutA]
+            GTWO = GOTO[cutB:]
+            GOTO = np.array(GONE+GTWO+GREFHALF)
+
+            WREFHALF = WHICH_IS[cutA:cutB]
+            WONE = WHICH_IS[:cutA]
+            WTWO = WHICH_IS[cutB:]
+            WHICH_IS = WONE+WTWO+WREFHALF
+
+            OPERATOR = qt.Qobj(np.array([state.full().T[0] for state in STATES]))
+
+            print("reorganized operator")
+            print(OPERATOR)
+
+            total_op = OPERATOR
+            for i in range(2, len(self.children)):
+                total_op = qt.tensor(total_op, qt.identity(temp_dims[i]))
+
+            total_op.dims = [[total_op.shape[0]], [total_op.shape[1]]]
+            temp_state.dims = [[temp_state.shape[0]], [1]]
+
+            print("total_op")
+            print(total_op)
+
+            temp_state = total_op*temp_state
+
+            print("projected state")
+            print(temp_state)
+
+            temp_state = qt.Qobj( np.array( temp_state.full().T[0].tolist()[beginna:] ) ).unit()
+            
+            print("truncated state")
+            print(temp_state)
+            print(temp_dims)
+
+            del temp_dims[0]
+            del temp_dims[0]
+            final_j = boundaries_are[pick]
+            temp_dims.insert(0, int(2*final_j+1))
+
+            print("new_dims")
+            print(temp_dims)
+
+            return (ai, bi, temp_state, temp_dims)
+
+    def finish_up_collide(self, ai, bi, temp_state, temp_dims):
+        print("finishing up collide")
+        self.children[0] = self.children[ai]
+        self.children[1] = self.children[bi]
+
+        del self.children[0]
+        del self.children[0]
+
+        self.children.insert(0, MixedSphere(parent=self, energy=qt.rand_herm(temp_dims[0])))
+        self.children[0].refresh()
+
+        self.state = temp_state
+        self.dims = temp_dims
+        self.state.dims = [self.dims, [1]*len(self.dims)]
+
+        return self.children[0]
+
+    def split_child(self, child, spin_a, spin_b):
+        if child in self.children:
+
+            print("state:\n%s" % self.state)
+
+            ci = self.children.index(child)
+
+            print("child index %d" % ci)
+
+            temp_state = self.state.copy()
+            temp_state = qt.tensor_swap(temp_state, (ci, 0))
+
+            temp_dims = self.dims[:]
+            temp_dims[0], temp_dims[ci] = temp_dims[ci], temp_dims[0]
+
+            print("swapped dims %s" % temp_dims)
+
+            OPERATOR, STATES, GOTO, WHICH_IS = coupling(spin_a, spin_b)
+
+            print("orig which_is")
+            print(WHICH_IS)
+
+            my = self.child_state(child)
+            my_spin = (my.shape[0]-1)/2.
+
+            FSTATES = []
+            FGOTO = []
+            FWHICH_IS = []
+            for i in range(len(WHICH_IS)):
+                if WHICH_IS[i][0] == my_spin:
+                    FSTATES.append(STATES[i])
+                    FGOTO.append(GOTO[i])
+                    FWHICH_IS.append(WHICH_IS[i])
+
+            print("-> states")
+            print(FSTATES)
+            print("-> goto")
+            print(FGOTO)
+            print("-> which_is")
+            print(FWHICH_IS)
+
+            FOPERATOR = qt.Qobj(np.array([state.full().T[0] for state in FSTATES]))
+            print("-> operator")
+            print(FOPERATOR)
+
+            total_op = FOPERATOR
+            for i in range(1, len(self.children)):
+                total_op = qt.tensor(total_op, qt.identity(temp_dims[i]))
+            total_op = total_op.dag()
+            print("-> upgraded operator")
+            print(total_op)
+
+            print(temp_state)
+
+            print("-> on state")
+            temp_state = total_op*temp_state
+            print(temp_state)
+
+            temp_dims.insert(0, int(spin_a*2 + 1))
+            temp_dims[1] = int(spin_b*2 + 1)
+
+            print("new dims %s" % temp_dims)
+            return (temp_dims, temp_state)
+
+    def finish_up_split(self, temp_dims, temp_state):
+        print("finishing up split")
+        del self.children[0]
+        self.dims = temp_dims
+        self.state = temp_state
+        self.state.dims = [self.dims, [1]*len(self.dims)]
+        self.children.insert(0, MixedSphere(parent=self,energy=qt.rand_herm(self.dims[0])))
+        self.children.insert(0, MixedSphere(parent=self,energy=qt.rand_herm(self.dims[1])))
+        self.children[0].refresh()
+        self.children[1].refresh()
+        return self.children[0]
+
+    def penrose_angle(self, a, b):
+        pass
+
+
+if __name__ == '__main__':
+    spheres = Spheres()
+    a = Sphere(state=qt.basis(3,2))
+    b = Sphere(state=qt.basis(2,1))
+    spheres.add_child(a)
+    spheres.add_child(b)
+    spheres.split_child(a,0.5,0.5)
