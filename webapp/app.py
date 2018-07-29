@@ -23,7 +23,7 @@ def reset_options():
     options["symmetrical_selected"] = "sphere"
     options["1d_harmonic_oscillator"] = False
     options["2d_harmonic_oscillator"] = False
-    options["show_others"] = True
+    options["show_others"] = False
 
 reset_options()
 
