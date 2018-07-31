@@ -57,6 +57,10 @@ def animate():
     global did_split
     while True:
       #  try:
+
+        #if len(the_spheres.children) > 2:
+        #    print(the_spheres.penrose_angle(the_spheres.children[0], the_spheres.children[1]))
+
         if new_sphere != None:
             sphere = the_spheres.finish_up_collide(*new_sphere)
             new_sphere = None
@@ -119,7 +123,8 @@ def animate():
                             "1d_harmonic_oscillator" : harmonic_osc_1d,\
                             "2d_harmonic_oscillator" : harmonic_osc_2d,\
                             "sym_arrows" : sym_arrows,\
-                            "others" : the_spheres.pretty_children(sphere) if options["show_others"] else ""});
+                            "others" : the_spheres.pretty_children(sphere) if options["show_others"] else "",\
+                            "pure" : True if sphere.pure_sphere != None else False  });
         sio.emit("animate", data)
         sio.sleep(0.001)
         #except Exception as e:
@@ -255,20 +260,36 @@ def key_press(sid, data):
             sio.emit("collapsed", json.dumps({"message": "evolution type: %s!" % sphere.evolution}))
     elif (keyCode == 59): # ';'
         if sphere.pure_sphere != None:
-            sphere.harmonic_oscillator_1D_collapse("position")
-            sio.emit("collapsed", json.dumps({"message": "1D position collapse!"}))
+            pick, L, probabilities = sphere.harmonic_oscillator_1D_collapse("position")
+            message = "1D position collapse!\n"
+            message += "%.2f of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
     elif (keyCode == 39): # '''
         if sphere.pure_sphere != None:
-            sphere.harmonic_oscillator_1D_collapse("momentum")
-            sio.emit("collapsed", json.dumps({"message": "1D momentum collapse!"}))
+            pick, L, probabilities = sphere.harmonic_oscillator_1D_collapse("momentum")
+            message = "1D momentum collapse!\n"
+            message += "%.2f of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
     elif (keyCode == 92): # '\'
         if sphere.pure_sphere != None:
-            sphere.harmonic_oscillator_1D_collapse("number")
-            sio.emit("collapsed", json.dumps({"message": "1D number collapse!"}))
+            pick, L, probabilities = sphere.harmonic_oscillator_1D_collapse("number")
+            message = "1D number collapse!\n"
+            message += "%.2f of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
     elif (keyCode == 61): # '='
         if sphere.pure_sphere != None:
-            sphere.harmonic_oscillator_1D_collapse("energy")
-            sio.emit("collapsed", json.dumps({"message": "1D energy collapse!"}))
+            pick, L, probabilities = sphere.harmonic_oscillator_1D_collapse("energy")
+            message = "1D energy collapse!\n"
+            message += "%.2f of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
 
 def do_rotation(direction, inverse=False):
     global sphere
@@ -298,8 +319,11 @@ def do_collapse(direction):
     global options
     if options["distinguishable_selected"] != "sphere":
         if direction != "h":
-            sphere.distinguishable_collapse(options["distinguishable_selected"], direction)
-            message = "distinguishable %d collapse!" % (options["distinguishable_selected"])
+            pick, L, probabilities = sphere.distinguishable_collapse(options["distinguishable_selected"], direction)
+            message = "distinguishable %d collapse!\n" % (options["distinguishable_selected"])
+            message += "%.2f of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
     else:
         if options["symmetrical_selected"] == "sphere":
@@ -316,12 +340,15 @@ def do_collapse(direction):
                 op = qt.rand_herm(sphere.n())
             pick, L, probabilities = sphere.collapse(op)
             message = "last collapse: %.2f of %s\n                with {%s}!" \
-                % (L[pick], np.array_str(L, precision=2, suppress_small=True),\
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
                         " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
         else:
-            sphere.symmetrical_collapse(direction, options["symmetrical_selected"])
-            message = "symmetrical %d collapse!" % (options["symmetrical_selected"])
+            pick, L, probabilities = sphere.symmetrical_collapse(direction, options["symmetrical_selected"])
+            message = "symmetrical %d collapse!\n" % (options["symmetrical_selected"])
+            message += "%.2f of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
 
 @sio.on("selected") # click on sphere/white star/red star
@@ -371,8 +398,15 @@ def collide(sid, data):
     if data["i"].isdigit():
         i = int(data["i"])
         if i < len(the_spheres.children) and i != the_spheres.children.index(sphere):
-            new_sphere = the_spheres.collide_children(sphere, the_spheres.children[i])
+            things = the_spheres.collide_children(sphere, the_spheres.children[i])
+            pick, L, probabilities = things[-1]
+            new_sphere = things[:-1]
             reset_options()
+            options["show_others"] = True
+            message = "collision! -> spin-%.1f: of %s\n                with {%s}!" \
+                % (pick, np.array_str(L, precision=2, suppress_small=True),\
+                        " ".join(["%.2f%%" % (100*p) for p in probabilities]))
+            sio.emit("collapsed", json.dumps({"message": message}))
     #print(the_spheres.children)
 
 @sio.on("swap")
@@ -385,6 +419,7 @@ def swap(sid, data):
             sphere = the_spheres.children[i]
             sphere.refresh()
             reset_options()
+            options["show_others"] = True
 
 @sio.on("create")
 def create(sid, data):
@@ -396,10 +431,20 @@ def split(sid, data):
     global the_spheres
     global sphere
     global did_split
-    a = float(data["a"])
-    b = float(data["b"])
-    did_split = the_spheres.split_child(sphere, a, b)
-    reset_options()
+    if is_number(data["a"]) and is_number(data["b"]):
+        a = float(data["a"])
+        b = float(data["b"])
+        if a+b == sphere.spin():
+            did_split = the_spheres.split_child(sphere, a, b)
+            reset_options()
+            options["show_others"] = True
+            sio.emit("collapsed", json.dumps({"message": "split!"}))
+
+@sio.on("penrose")
+def penrose(sid, data):
+    global the_spheres
+    global sphere
+    sio.emit("angles", {"angles": the_spheres.pretty_penrose()})
 
 ##################################################################################################################
 

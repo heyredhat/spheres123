@@ -13,6 +13,13 @@ import numpy as np
 
 ##################################################################################################################
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
 def dim_spin(n):
     return (n-1.)/2.
 
@@ -301,14 +308,14 @@ def separable(whole, dims, piece_index):
     whole_copy.dims = [[dims],[1]*len(dims)]
     reduction = whole_copy.ptrace(piece_index)
     entropy = qt.entropy_vn(reduction) 
-    if entropy < 0.000001 and entropy > -0.999999:
+    if entropy < 0.0001 and entropy > -0.9999:
         return True
     else:
         return False
 
 def mixed_separable(part):
     entropy = qt.entropy_vn(part) 
-    if entropy < 0.000001 and entropy > -0.999999:
+    if entropy < 0.0001 and entropy > -0.9999:
         return True
     else:
         return False

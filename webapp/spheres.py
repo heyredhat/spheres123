@@ -5,7 +5,6 @@ import gellman
 import qutip as qt
 import numpy as np
 from magic import *
-from puresphere import *
 from mixedsphere import *
 
 class Spheres:
@@ -13,6 +12,20 @@ class Spheres:
         self.state = None
         self.children = []
         self.dims = []
+
+    def pretty_penrose(self):
+        if len(self.children) > 1:
+            s = "   -------------------------------\n"
+            for i, a in enumerate(self.children):
+                s += "     %d:\n" % i
+                for j, b in enumerate(self.children):
+                    if i != j:
+                        pa = self.penrose_angle(a, b)
+                        if pa == None:
+                            s += "        has no angle w/ %d\n" % (j)
+                        else:
+                            s += "        makes %.2f degrees w/ %d\n" % (math.degrees(pa), j)
+            return s
 
     def pretty_children(self, selected):
         s = ""
@@ -167,9 +180,15 @@ class Spheres:
             projector.dims = [self.dims, self.dims]
             self.state = (projector*self.state).unit()
             child_sphere.refresh()
+            return L[pick], L, probabilities
 
     def collide_children(self, a, b):
         if a in self.children and b in self.children:
+            AA = self.child_state(a)
+            spinA = (AA.shape[0]-1)/2.
+            BB = self.child_state(b)
+            spinB = (BB.shape[0]-1)/2.
+
             print("state:\n%s" % self.state)
 
             ai = self.children.index(a)
@@ -189,11 +208,6 @@ class Spheres:
             temp_dims[1], temp_dims[bi] = temp_dims[bi], temp_dims[1]
 
             print("swapped dims %s" % temp_dims)
-
-            AA = self.child_state(a)
-            spinA = (AA.shape[0]-1)/2.
-            BB = self.child_state(b)
-            spinB = (BB.shape[0]-1)/2.
 
             print("spinA %f" % spinA)
             print("spinB %f" % spinB)
@@ -333,7 +347,9 @@ class Spheres:
             print("new_dims")
             print(temp_dims)
 
-            return (ai, bi, temp_state, temp_dims)
+            temp_state.dims = [temp_dims, [1]*len(temp_dims)]
+            stuff = [boundaries_are[pick], np.array(boundaries_are), np.array(j_probs)]
+            return (ai, bi, temp_state, temp_dims, stuff)
 
     def finish_up_collide(self, ai, bi, temp_state, temp_dims):
         print("finishing up collide")
@@ -354,6 +370,8 @@ class Spheres:
 
     def split_child(self, child, spin_a, spin_b):
         if child in self.children:
+            my = self.child_state(child)
+            my_spin = (my.shape[0]-1)/2.
 
             print("state:\n%s" % self.state)
 
@@ -373,9 +391,6 @@ class Spheres:
 
             print("orig which_is")
             print(WHICH_IS)
-
-            my = self.child_state(child)
-            my_spin = (my.shape[0]-1)/2.
 
             FSTATES = []
             FGOTO = []
@@ -412,8 +427,10 @@ class Spheres:
 
             temp_dims.insert(0, int(spin_a*2 + 1))
             temp_dims[1] = int(spin_b*2 + 1)
+            temp_state.dims = [temp_dims, [1]*len(temp_dims)]
 
             print("new dims %s" % temp_dims)
+
             return (temp_dims, temp_state)
 
     def finish_up_split(self, temp_dims, temp_state):
@@ -428,14 +445,120 @@ class Spheres:
         self.children[1].refresh()
         return self.children[0]
 
-    def penrose_angle(self, a, b):
-        pass
+    def penrose_angle(self, a, b, twice=None):
+        if a in self.children and b in self.children:
+            AA = self.child_state(a)
+            spinA = (AA.shape[0]-1)/2.
+            if spinA <= 0.5:
+                return None
+            else:
+                BB = self.child_state(b)
+                spinB = (BB.shape[0]-1)/2.
+
+                ai = self.children.index(a)
+
+                temp_state = self.state.copy()
+                temp_state = qt.tensor_swap(temp_state, (ai, 0))
+                temp_dims = self.dims[:]
+                temp_dims[0], temp_dims[ai] = temp_dims[ai], temp_dims[0]
+
+                OPERATOR, STATES, GOTO, WHICH_IS = coupling(spinA-0.5, 0.5)
+
+                FSTATES = []
+                FGOTO = []
+                FWHICH_IS = []
+                for i in range(len(WHICH_IS)):
+                    if WHICH_IS[i][0] == spinA:
+                        FSTATES.append(STATES[i])
+                        FGOTO.append(GOTO[i])
+                        FWHICH_IS.append(WHICH_IS[i])
+                FOPERATOR = qt.Qobj(np.array([state.full().T[0] for state in FSTATES]))
+
+                total_op = FOPERATOR
+                for i in range(1, len(self.children)):
+                    total_op = qt.tensor(total_op, qt.identity(temp_dims[i]))
+                total_op = total_op.dag()
+
+                temp_state = total_op*temp_state
+                temp_dims.insert(0, int((spinA-0.5)*2 + 1))
+                temp_dims[1] = int((0.5)*2 + 1)
+                temp_state.dims = [temp_dims, [1]*len(temp_dims)]
+                print("(((")
+                print(temp_dims)
+                print(temp_state)
+                print(")))")
+
+                bi = self.children.index(b)+1
+                ei = 1
+
+                temp_state = qt.tensor_swap(temp_state, (bi, 0))
+                temp_dims[0], temp_dims[bi] = temp_dims[bi], temp_dims[0]
+
+                OPERATOR, STATES, GOTO, WHICH_IS = coupling(spinB, 0.5)
+
+                boundaries = [0]
+                boundaries_are = [WHICH_IS[0][0]]
+                last_which = WHICH_IS[0][0]
+                for i in range(len(WHICH_IS)):
+                    if WHICH_IS[i][0] != last_which:
+                        boundaries.append(i)
+                        boundaries_are.append(WHICH_IS[i][0])
+                    last_which = WHICH_IS[i][0]
+
+                for state in STATES:
+                    state.dims = [[state.shape[0]], [1]]
+                projectors = [qt.Qobj(state).ptrace(0) for state in STATES]
+                print("{")
+                print(temp_state)
+                print(projectors[0])
+                print(temp_dims)
+                upgraded_projectors = []
+                for i in range(len(STATES)):
+                    total_op = projectors[i]
+                    for j in range(2, len(self.children)):
+                        total_op = qt.tensor(total_op, qt.identity(temp_dims[j]))
+                    total_op.dims = [[total_op.shape[0]], [total_op.shape[0]]]
+                    upgraded_projectors.append(total_op)
+
+                #print("22")
+                #print(temp_state)
+                #print("33")
+                temp_state.dims = [[temp_state.shape[0]], [1]]
+                temp_dm = temp_state.ptrace(0)
+                temp_state.dims = [temp_dims, [1]*len(temp_dims)]
+                temp_dm.dims = [[temp_dm.shape[0]], [temp_dm.shape[0]]]
+
+                print("(")
+                print(temp_dm)
+                print(upgraded_projectors[0])
+                print(")")
+                probabilities = [(proj*temp_dm).tr().real for proj in upgraded_projectors]
+
+                for i in range(len(WHICH_IS)):
+                    j, m = WHICH_IS[i]
+                    if j == 0: # No spin-0 for now
+                        probabilities[i] = 0
+
+                probabilities = np.array(probabilities)
+                probabilities = probabilities/probabilities.sum()
+
+                j_probs = []
+                for i, B in enumerate(boundaries):
+                    if i == len(boundaries)-1:
+                        j_probs.append(sum(probabilities[B:]))
+                    else:
+                        j_probs.append(sum(probabilities[B:boundaries[i+1]]))
+
+                probs = {"up" : j_probs[0], "down" : j_probs[1]}
+                theta = math.acos(2*probs["up"] - 1) #math.acos(1-2*probs["down"])
+                return theta
 
 
 if __name__ == '__main__':
     spheres = Spheres()
-    a = Sphere(state=qt.basis(3,2))
-    b = Sphere(state=qt.basis(2,1))
-    spheres.add_child(a)
-    spheres.add_child(b)
-    spheres.split_child(a,0.5,0.5)
+    a = spheres.add_child(qt.rand_ket(10))
+    b = spheres.add_child(qt.rand_ket(12))
+    #spheres.state = qt.rand_ket(6*7)
+    #spheres.state.dims = [[6,7], [1,1]]
+    #spheres.split_child(a,0.5,0.5)
+    spheres.penrose_angle(a,b)

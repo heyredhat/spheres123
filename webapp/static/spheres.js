@@ -105,6 +105,10 @@ spheresSocket.on("new_dist_ctrls", function(socketData) {
 	document.getElementById("density_selector").innerHTML = socketData["new_dist_ctrls"];
 });
 
+spheresSocket.on("angles", function(socketData) {
+	document.getElementById("angles").innerHTML = socketData["angles"];
+});
+
 function set_dims() {
 	spheresSocket.emit("dim_set", {"dims": document.getElementById("dims").value});
 }
@@ -131,6 +135,10 @@ function do_create() {
 function do_split() {
 	spheresSocket.emit("split", {"a": document.getElementById("split1").value,
 							     "b": document.getElementById("split2").value});
+}
+
+function do_angles() {
+	spheresSocket.emit("penrose", {"": ""});
 }
 
 /************************************************************************************************************/
@@ -175,6 +183,14 @@ function render (response) {
 	var new_harmonic_osc2D = response["2d_harmonic_oscillator"];
 	var new_sym_arrows = response["sym_arrows"];
 	var new_others = response["others"];
+	var new_purity = response["pure"];
+
+	// Update mixed/pure
+	if (new_purity == true) {
+		sphere.material.color.setHex(0x0000ff);
+	} else {
+		sphere.material.color.setHex(0xd3d3d3);
+	}
 
 	// Update others pane
 	if (new_others == "") {
