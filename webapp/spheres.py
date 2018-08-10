@@ -15,6 +15,7 @@ class Spheres:
 
     def pretty_penrose(self):
         if len(self.children) > 1:
+            ##print('hiiii')
             s = "   -------------------------------\n"
             for i, a in enumerate(self.children):
                 s += "     %d:\n" % i
@@ -36,6 +37,9 @@ class Spheres:
         return s
 
     def add_child(self, child_state):
+        ##print("adding child")
+        ##print(self.state)
+        ##print(self.dims)
         child_state.dims = [[child_state.shape[0]],[1]]
         if self.state == None:
             self.state = child_state
@@ -44,34 +48,41 @@ class Spheres:
         self.dims.append(child_state.shape[0])
         self.children.append(MixedSphere(parent=self, energy=qt.rand_herm(child_state.shape[0]),\
                                             dt=0.001, evolving=False))
-        self.children[-1].refresh()
+        #self.children[-1].refresh()
+        for child in self.children:
+            child.refresh()
+        ####print("**")
+        ###print(self.state)
+        ###print(self.dims)
         return self.children[-1]
 
     def update_child(self, child, new_state):
-        #print("ha")
-        if self.is_separable(child):
-            if len(self.children) == 1:
-                #print("hek")
-                #print(self.state)
-                #print(new_state)
-                self.state = new_state
-                self.dims = new_state.dims[0]
-                self.state.dims = [self.dims, [1]*len(self.dims)]
-                #print(self.dims)
-            else:
+        ###print("ha") #PROBLEMS HERE
+        if len(self.children) == 1:
+            self.state = new_state
+            self.dims = new_state.dims[0]
+            self.state.dims = [self.dims, [1]*len(self.dims)]
+        else:
+            if self.is_separable(child):
                 temp_state = self.state.copy()
                 i = self.children.index(child)
+                temp_dims = self.dims[:]
                 temp_state = qt.tensor_swap(temp_state, (i, 0))
+                temp_dims[i], temp_dims[0] = temp_dims[0], temp_dims[i]
                 temp_state = density_to_purevec(temp_state.ptrace(list(range(1,len(self.dims)))))
                 temp_state = qt.tensor(new_state, temp_state)
+                temp_dims[0] = new_state.shape[0]
+                temp_state.dims = [temp_dims, [1]*len(temp_dims)]
                 temp_state = qt.tensor_swap(temp_state, (0, i))
                 self.state = temp_state
                 self.dims[i] = new_state.shape[0]
                 self.state.dims = [self.dims, [1]*len(self.dims)]
-                #print('hi')
-                #print(self.state)
-                #print(self.dims)
-            child.refresh()
+                ###print('hi')
+                ##print("(((")
+                ##print(self.state)
+                ##print(self.dims)
+                ##print("_))")
+                child.refresh(pure=True)
 
     def remove_child(self, child_sphere):
         if len(self.children) == 0:
@@ -147,21 +158,21 @@ class Spheres:
 
     def evolve_child(self, child_sphere, operator, dt=0.01, inverse=False):
         if child_sphere in self.children:
-            print("operator")
-            print(operator)
+            #print("operator")
+            #print(operator)
             op = self.upgrade_operator(child_sphere, operator) if len(self.children) > 1 else operator
-            print("op")
-            print(op)
+            #print("op")
+            #print(op)
             unitary = (-2*math.pi*1j*op*dt).expm()
             if inverse:
                 unitary = unitary.dag()
             cp = self.state.copy()
             cp.dims = [self.dims, [1]*len(self.dims)]
             unitary.dims = [self.dims, self.dims]
-            print("(")
-            print(unitary)
-            print(cp)
-            print(")")
+            #print("(")
+            #print(unitary)
+            #print(cp)
+            #print(")")
             cp = unitary*cp
             self.state = cp
 
@@ -189,35 +200,38 @@ class Spheres:
             BB = self.child_state(b)
             spinB = (BB.shape[0]-1)/2.
 
-            print("state:\n%s" % self.state)
+            #print("state:\n%s" % self.state)
 
             ai = self.children.index(a)
             bi = self.children.index(b)
 
-            print("child index ai %d" % ai)
-            print("child index bi %d" % bi)
+            #print("child index ai %d" % ai)
+            #print("child index bi %d" % bi)
 
             temp_state = self.state.copy()
+
             temp_state = qt.tensor_swap(temp_state, (ai, 0))
+            if bi == 0:
+                bi = ai
             temp_state = qt.tensor_swap(temp_state, (bi, 1))
 
-            print("swapped state\n%s" % temp_state)
+            #print("swapped state\n%s" % temp_state)
 
             temp_dims = self.dims[:]
             temp_dims[0], temp_dims[ai] = temp_dims[ai], temp_dims[0]
             temp_dims[1], temp_dims[bi] = temp_dims[bi], temp_dims[1]
 
-            print("swapped dims %s" % temp_dims)
+            #print("swapped dims %s" % temp_dims)
 
-            print("spinA %f" % spinA)
-            print("spinB %f" % spinB)
+            #print("spinA %f" % spinA)
+            #print("spinB %f" % spinB)
 
             OPERATOR, STATES, GOTO, WHICH_IS = coupling(spinA, spinB)
 
-            print("coupling")
-            print("operator")
-            print(OPERATOR)
-            print("which_is %s" % WHICH_IS)
+            #print("coupling")
+            #print("operator")
+            #print(OPERATOR)
+            #print("which_is %s" % WHICH_IS)
 
             boundaries = [0]
             boundaries_are = [WHICH_IS[0][0]]
@@ -228,43 +242,43 @@ class Spheres:
                     boundaries_are.append(WHICH_IS[i][0])
                 last_which = WHICH_IS[i][0]
 
-            print("boundaries %s" % boundaries)
-            print("boundaries are %s" % boundaries_are)
+            #print("boundaries %s" % boundaries)
+            #print("boundaries are %s" % boundaries_are)
 
-            print("{")
-            print(temp_dims)
+            #print("{")
+            #print(temp_dims)
             for state in STATES:
                 state.dims = [[state.shape[0]], [1]]
-            print(spinA)
-            print(spinB)
-            print(STATES)
+            #print(spinA)
+            #print(spinB)
+            #print(STATES)
             projectors = [qt.Qobj(state).ptrace(0) for state in STATES]
-            print(projectors)
+            #print(projectors)
             upgraded_projectors = []
             for i in range(len(STATES)):
                 total_op = projectors[i]
-                for j in range(2, len(self.children)):
+                for j in range(2, len(temp_dims)):
                     total_op = qt.tensor(total_op, qt.identity(temp_dims[j]))
                 total_op.dims = [[total_op.shape[0]], [total_op.shape[0]]]
                 upgraded_projectors.append(total_op)
-            print(upgraded_projectors)
-            print("}")
-            print("projectors")
-            print(upgraded_projectors)
+            #print(upgraded_projectors)
+            #print("}")
+            #print("projectors")
+            #print(upgraded_projectors)
 
             temp_state.dims = [[temp_state.shape[0]], [1]]
             temp_dm = temp_state.ptrace(0)
             temp_state.dims = [temp_dims, [1]*len(temp_dims)]
             temp_dm.dims = [[temp_dm.shape[0]], [temp_dm.shape[0]]]
-            print("(")
-            print(upgraded_projectors[0].dims)
-            print(temp_dm.dims)
-            print(")")
+            #print("(")
+            #print(upgraded_projectors[0].dims)
+            #print(temp_dm.dims)
+            #print(")")
             probabilities = [(proj*temp_dm).tr().real for proj in upgraded_projectors]
 
-            print("which_is %s" % WHICH_IS)
-            print("probabilities %s" % probabilities )
-            print(probabilities)
+            #print("which_is %s" % WHICH_IS)
+            #print("probabilities %s" % probabilities )
+            #print(probabilities)
 
             for i in range(len(WHICH_IS)):
                 j, m = WHICH_IS[i]
@@ -281,27 +295,27 @@ class Spheres:
                 else:
                     j_probs.append(sum(probabilities[b:boundaries[i+1]]))
 
-            print("reformed probabilities over j's")
-            print(j_probs)
+            #print("reformed probabilities over j's")
+            #print(j_probs)
 
             pick = np.random.choice(list(range(len(j_probs))), 1, p=j_probs)[0]
 
-            print("pick %d" % pick)
+            #print("pick %d" % pick)
 
             cutA = int(boundaries[pick])
             cutB = int(cutA + boundaries_are[pick]*2 + 1)
 
-            print("cutting from %d to %d of %s" % (cutA, cutB, WHICH_IS))
+            #print("cutting from %d to %d of %s" % (cutA, cutB, WHICH_IS))
 
             REFHALF = STATES[cutA:cutB]
             ONE = STATES[:cutA]
             TWO = STATES[cutB:]
             STATES = np.array(ONE+TWO+REFHALF)
 
-            print("len(ONE)=%d + len(TWO)=%d + len(REFHALF)=%d = %d" % (len(ONE), len(TWO), len(REFHALF), len(STATES)))
+            #print("len(ONE)=%d + len(TWO)=%d + len(REFHALF)=%d = %d" % (len(ONE), len(TWO), len(REFHALF), len(STATES)))
 
             beginna = int(len(ONE+TWO)*np.prod(temp_dims[2:]))
-            print("cutting from %d" % beginna)
+            #print("cutting from %d" % beginna)
 
             GREFHALF = GOTO[cutA:cutB]
             GONE = GOTO[:cutA]
@@ -315,8 +329,8 @@ class Spheres:
 
             OPERATOR = qt.Qobj(np.array([state.full().T[0] for state in STATES]))
 
-            print("reorganized operator")
-            print(OPERATOR)
+            #print("reorganized operator")
+            #print(OPERATOR)
 
             total_op = OPERATOR
             for i in range(2, len(self.children)):
@@ -325,34 +339,34 @@ class Spheres:
             total_op.dims = [[total_op.shape[0]], [total_op.shape[1]]]
             temp_state.dims = [[temp_state.shape[0]], [1]]
 
-            print("total_op")
-            print(total_op)
+            #print("total_op")
+            #print(total_op)
 
             temp_state = total_op*temp_state
 
-            print("projected state")
-            print(temp_state)
+            #print("projected state")
+            #print(temp_state)
 
             temp_state = qt.Qobj( np.array( temp_state.full().T[0].tolist()[beginna:] ) ).unit()
             
-            print("truncated state")
-            print(temp_state)
-            print(temp_dims)
+            #print("truncated state")
+            #print(temp_state)
+            #print(temp_dims)
 
             del temp_dims[0]
             del temp_dims[0]
             final_j = boundaries_are[pick]
             temp_dims.insert(0, int(2*final_j+1))
 
-            print("new_dims")
-            print(temp_dims)
+            #print("new_dims")
+            #print(temp_dims)
 
             temp_state.dims = [temp_dims, [1]*len(temp_dims)]
             stuff = [boundaries_are[pick], np.array(boundaries_are), np.array(j_probs)]
             return (ai, bi, temp_state, temp_dims, stuff)
 
     def finish_up_collide(self, ai, bi, temp_state, temp_dims):
-        print("finishing up collide")
+        ##print("finishing up collide")
         self.children[0] = self.children[ai]
         self.children[1] = self.children[bi]
 
@@ -360,12 +374,18 @@ class Spheres:
         del self.children[0]
 
         self.children.insert(0, MixedSphere(parent=self, energy=qt.rand_herm(temp_dims[0])))
-        self.children[0].refresh()
 
         self.state = temp_state
         self.dims = temp_dims
         self.state.dims = [self.dims, [1]*len(self.dims)]
-
+        ##print("@@@@@")
+        ##print(self.children[0].state)
+        ##print(self.children[0].energy)
+        ##print("@")
+        self.children[0].refresh()
+        ##print(self.children[0].state)
+        ##print(self.children[0].energy)
+        ##print("****")
         return self.children[0]
 
     def split_child(self, child, spin_a, spin_b):
@@ -373,11 +393,11 @@ class Spheres:
             my = self.child_state(child)
             my_spin = (my.shape[0]-1)/2.
 
-            print("state:\n%s" % self.state)
+            ##print("state:\n%s" % self.state)
 
             ci = self.children.index(child)
 
-            print("child index %d" % ci)
+            ##print("child index %d" % ci)
 
             temp_state = self.state.copy()
             temp_state = qt.tensor_swap(temp_state, (ci, 0))
@@ -385,12 +405,12 @@ class Spheres:
             temp_dims = self.dims[:]
             temp_dims[0], temp_dims[ci] = temp_dims[ci], temp_dims[0]
 
-            print("swapped dims %s" % temp_dims)
+            ##print("swapped dims %s" % temp_dims)
 
             OPERATOR, STATES, GOTO, WHICH_IS = coupling(spin_a, spin_b)
 
-            print("orig which_is")
-            print(WHICH_IS)
+            ##print("orig which_is")
+            ##print(WHICH_IS)
 
             FSTATES = []
             FGOTO = []
@@ -401,46 +421,48 @@ class Spheres:
                     FGOTO.append(GOTO[i])
                     FWHICH_IS.append(WHICH_IS[i])
 
-            print("-> states")
-            print(FSTATES)
-            print("-> goto")
-            print(FGOTO)
-            print("-> which_is")
-            print(FWHICH_IS)
+            ##print("-> states")
+            ##print(FSTATES)
+            ##print("-> goto")
+            ##print(FGOTO)
+            ##print("-> which_is")
+            ##print(FWHICH_IS)
 
             FOPERATOR = qt.Qobj(np.array([state.full().T[0] for state in FSTATES]))
-            print("-> operator")
-            print(FOPERATOR)
+            ##print("-> operator")
+            ##print(FOPERATOR)
 
             total_op = FOPERATOR
             for i in range(1, len(self.children)):
                 total_op = qt.tensor(total_op, qt.identity(temp_dims[i]))
             total_op = total_op.dag()
-            print("-> upgraded operator")
-            print(total_op)
+            ##print("-> upgraded operator")
+            ##print(total_op)
 
-            print(temp_state)
+            ##print(temp_state)
 
-            print("-> on state")
+            ##print("-> on state")
             temp_state = total_op*temp_state
-            print(temp_state)
+            ##print(temp_state)
 
             temp_dims.insert(0, int(spin_a*2 + 1))
             temp_dims[1] = int(spin_b*2 + 1)
             temp_state.dims = [temp_dims, [1]*len(temp_dims)]
 
-            print("new dims %s" % temp_dims)
+            ##print("new dims %s" % temp_dims)
 
             return (temp_dims, temp_state)
 
     def finish_up_split(self, temp_dims, temp_state):
-        print("finishing up split")
+        ##print("finishing up split")
         del self.children[0]
         self.dims = temp_dims
         self.state = temp_state
         self.state.dims = [self.dims, [1]*len(self.dims)]
-        self.children.insert(0, MixedSphere(parent=self,energy=qt.rand_herm(self.dims[0])))
+        ##print("(*&*&#^$")
+        ##print(self.state)
         self.children.insert(0, MixedSphere(parent=self,energy=qt.rand_herm(self.dims[1])))
+        self.children.insert(0, MixedSphere(parent=self,energy=qt.rand_herm(self.dims[0])))
         self.children[0].refresh()
         self.children[1].refresh()
         return self.children[0]
@@ -452,15 +474,26 @@ class Spheres:
             if spinA <= 0.5:
                 return None
             else:
+                #print("uaefhiuawehfuaewhf")
                 BB = self.child_state(b)
                 spinB = (BB.shape[0]-1)/2.
 
+                #print(BB)
+                #print(spinB)
+
                 ai = self.children.index(a)
+
+                #print(ai)
+
+                #print(self.state)
 
                 temp_state = self.state.copy()
                 temp_state = qt.tensor_swap(temp_state, (ai, 0))
                 temp_dims = self.dims[:]
                 temp_dims[0], temp_dims[ai] = temp_dims[ai], temp_dims[0]
+
+                #print(temp_state)
+                #print(temp_dims)
 
                 OPERATOR, STATES, GOTO, WHICH_IS = coupling(spinA-0.5, 0.5)
 
@@ -483,13 +516,19 @@ class Spheres:
                 temp_dims.insert(0, int((spinA-0.5)*2 + 1))
                 temp_dims[1] = int((0.5)*2 + 1)
                 temp_state.dims = [temp_dims, [1]*len(temp_dims)]
-                print("(((")
-                print(temp_dims)
-                print(temp_state)
-                print(")))")
+                #print("(((")
+                #print(temp_dims)
+                #print(temp_state)
+                #print(")))")
 
-                bi = self.children.index(b)+1
+                bi = self.children.index(b)
+                if bi == 0:
+                    bi = ai
+                bi += 1
                 ei = 1
+
+                #print("bi")
+                #print(bi)
 
                 temp_state = qt.tensor_swap(temp_state, (bi, 0))
                 temp_dims[0], temp_dims[bi] = temp_dims[bi], temp_dims[0]
@@ -508,14 +547,16 @@ class Spheres:
                 for state in STATES:
                     state.dims = [[state.shape[0]], [1]]
                 projectors = [qt.Qobj(state).ptrace(0) for state in STATES]
-                print("{")
-                print(temp_state)
-                print(projectors[0])
-                print(temp_dims)
+                #print("{")
+                ##print(temp_state)
+                ##print(projectors[0])
+                #print(temp_dims)
+                #print(projectors[0])
+                #print("7")
                 upgraded_projectors = []
                 for i in range(len(STATES)):
                     total_op = projectors[i]
-                    for j in range(2, len(self.children)):
+                    for j in range(2, len(temp_dims)):
                         total_op = qt.tensor(total_op, qt.identity(temp_dims[j]))
                     total_op.dims = [[total_op.shape[0]], [total_op.shape[0]]]
                     upgraded_projectors.append(total_op)
@@ -528,10 +569,10 @@ class Spheres:
                 temp_state.dims = [temp_dims, [1]*len(temp_dims)]
                 temp_dm.dims = [[temp_dm.shape[0]], [temp_dm.shape[0]]]
 
-                print("(")
-                print(temp_dm)
-                print(upgraded_projectors[0])
-                print(")")
+                #print("(")
+                #print(temp_dm)
+                #print(upgraded_projectors[0])
+                #print(")")
                 probabilities = [(proj*temp_dm).tr().real for proj in upgraded_projectors]
 
                 for i in range(len(WHICH_IS)):

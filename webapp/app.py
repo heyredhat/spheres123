@@ -1,3 +1,4 @@
+import datetime
 from spheres import *
 from mixedsphere import *
 from puresphere import *
@@ -24,6 +25,9 @@ def reset_options():
     options["1d_harmonic_oscillator"] = False
     options["2d_harmonic_oscillator"] = False
     options["show_others"] = False
+    options["now"] = datetime.datetime.now()
+    options["latitude"] = 40.708457
+    options["longitude"] = -73.921884
 
 reset_options()
 
@@ -57,19 +61,31 @@ def animate():
     global did_split
     while True:
       #  try:
-
         #if len(the_spheres.children) > 2:
         #    print(the_spheres.penrose_angle(the_spheres.children[0], the_spheres.children[1]))
 
         if new_sphere != None:
             sphere = the_spheres.finish_up_collide(*new_sphere)
             new_sphere = None
-            sphere.refresh()
+            #sphere.refresh()
+            for child in the_spheres.children:
+                child.refresh()
 
         if did_split != None:
             sphere = the_spheres.finish_up_split(*did_split)
             did_split = None
-            sphere.refresh()
+            #sphere.refresh()
+            #print("!!!!!!!!!!!!!!")
+            #print(the_spheres.state)
+            #print(the_spheres.dims)
+            for child in the_spheres.children:
+                child.refresh()
+                #print(">>>")
+                #print(child.state)
+                #print(child.energy)
+
+            #print("!!!!!!!!!!!!!!")
+
 
         if sphere.evolving:
             if sphere.evolution == "1D":
@@ -78,6 +94,12 @@ def animate():
                 sphere.harmonic_oscillator_2D_evolve()
             elif sphere.evolution == "spin":
                 sphere.evolve(sphere.energy)
+            elif sphere.evolution == "astronomy":
+                options["now"] += datetime.timedelta(hours=sphere.dt*20)
+                the_spheres.update_child(sphere, star_state(options["now"], options["latitude"], options["longitude"]))
+                message = options["now"].strftime("%c")+" @ lat: %.2f lng: %.2f" % (options["latitude"], options["longitude"])
+                sio.emit("collapsed", json.dumps({"message": message}))
+                sphere.refresh()
 
         phase = sphere.phase() if options["show_phase"] else []
 
@@ -171,9 +193,16 @@ def key_press(sid, data):
         sphere.evolving = False if sphere.evolving else True
     elif (keyCode == 105): # 'i'
         if sphere.pure_sphere != None:
-            sphere.random_state()
+            if sphere.evolution == "astronomy":
+                options["latitude"] = 40.708457
+                options["longitude"] = -73.921884
+            else:
+                sphere.random_state()
     elif (keyCode == 111): # 'o'
-        sphere.random_energy()
+        if sphere.evolution == "astronomy":
+            options["now"] = datetime.datetime.now()
+        else:
+            sphere.random_energy()
     elif (keyCode == 106): # 'j'
         options["show_projection"] = False if options["show_projection"] else True
     elif (keyCode == 107): # 'k'
@@ -256,6 +285,12 @@ def key_press(sid, data):
             elif sphere.evolution == "1D":
                 sphere.evolution = "2D"
             elif sphere.evolution == "2D":
+                if sphere.pure_sphere != None and sphere.pure_sphere.state.shape[0] == 8:
+                    sphere.evolution = "astronomy"
+                    the_spheres.update_child(sphere, star_state(options["now"], options["latitude"], options["longitude"]))
+                else:
+                    sphere.evolution = "spin"
+            elif sphere.evolution == "astronomy":
                 sphere.evolution = "spin"
             sio.emit("collapsed", json.dumps({"message": "evolution type: %s!" % sphere.evolution}))
     elif (keyCode == 59): # ';'
@@ -294,29 +329,42 @@ def key_press(sid, data):
 def do_rotation(direction, inverse=False):
     global sphere
     global options
-    if options["distinguishable_selected"] != "sphere":
-        sphere.rotate_distinguishable(options["distinguishable_selected"], direction, dt=sphere.dt, inverse=inverse)
+    if sphere.evolution == "astronomy" and direction in ["x", "y", "z"]:
+        # rotate latitude and longitude
+        xyz = latitudeLongitude_xyz(options["latitude"], options["longitude"])
+        q = SurfaceXYZ_q([xyz])
+        unitary = (-2*math.pi*1j*sphere.dt*qt.jmat(0.5, direction)).expm()
+        if inverse:
+            unitary = unitary.dag()
+        q = unitary*q
+        lat, lon = xyz_latitudeLongitude(q_SurfaceXYZ(q)[0])
+        options["latitude"] = lat
+        options["longitude"] = lon
     else:
-        if options["symmetrical_selected"] != "sphere":
-            sphere.rotate_symmetrical(direction, options["symmetrical_selected"], dt=sphere.dt, inverse=inverse)
+        if options["distinguishable_selected"] != "sphere":
+            sphere.rotate_distinguishable(options["distinguishable_selected"], direction, dt=sphere.dt, inverse=inverse)
         else:
-            if options["rotate/boost"] == 0:
-                selected = options["click_selected"]
-                if selected.startswith("star"):
-                    sphere.rotate_star(int(selected[selected.index("_")+1:]), direction, inverse=inverse)
-                elif selected.startswith("component"):
-                    sphere.rotate_component(int(selected[selected.index("_")+1:]), direction, inverse=inverse,\
-                        unitary=options["component_unitarity"])
-                else:
-                    sphere.rotate(direction, inverse=inverse)
-            elif options["rotate/boost"] == 2:
-                sphere.mink_rotate(direction, sphere.dt, inverse=inverse)
-            elif options["rotate/boost"] == 1:
-                sphere.boost(direction, sphere.dt, inverse=inverse)
+            if options["symmetrical_selected"] != "sphere":
+                sphere.rotate_symmetrical(direction, options["symmetrical_selected"], dt=sphere.dt, inverse=inverse)
+            else:
+                if options["rotate/boost"] == 0:
+                    selected = options["click_selected"]
+                    if selected.startswith("star"):
+                        sphere.rotate_star(int(selected[selected.index("_")+1:]), direction, inverse=inverse)
+                    elif selected.startswith("component"):
+                        sphere.rotate_component(int(selected[selected.index("_")+1:]), direction, inverse=inverse,\
+                            unitary=options["component_unitarity"])
+                    else:
+                        sphere.rotate(direction, inverse=inverse)
+                elif options["rotate/boost"] == 2:
+                    sphere.mink_rotate(direction, sphere.dt, inverse=inverse)
+                elif options["rotate/boost"] == 1:
+                    sphere.boost(direction, sphere.dt, inverse=inverse)
 
 def do_collapse(direction):
     global sphere
     global options
+    global the_spheres
     if options["distinguishable_selected"] != "sphere":
         if direction != "h":
             pick, L, probabilities = sphere.distinguishable_collapse(options["distinguishable_selected"], direction)
@@ -325,6 +373,8 @@ def do_collapse(direction):
                 % (pick, np.array_str(L, precision=2, suppress_small=True),\
                         " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
+            for child in the_spheres.children:
+                child.refresh()
     else:
         if options["symmetrical_selected"] == "sphere":
             op = None
@@ -343,6 +393,8 @@ def do_collapse(direction):
                 % (pick, np.array_str(L, precision=2, suppress_small=True),\
                         " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
+            for child in the_spheres.children:
+                child.refresh()
         else:
             pick, L, probabilities = sphere.symmetrical_collapse(direction, options["symmetrical_selected"])
             message = "symmetrical %d collapse!\n" % (options["symmetrical_selected"])
@@ -350,6 +402,8 @@ def do_collapse(direction):
                 % (pick, np.array_str(L, precision=2, suppress_small=True),\
                         " ".join(["%.2f%%" % (100*p) for p in probabilities]))
             sio.emit("collapsed", json.dumps({"message": message}))
+            for child in the_spheres.children:
+                child.refresh()
 
 @sio.on("selected") # click on sphere/white star/red star
 def select(sid, data):
@@ -362,13 +416,13 @@ def dim_set(sid, data):
     global options
     options["distinguishable_selected"] = "sphere"
     if data["dims"].strip() == "":
-        sphere.dimensionality = None
+        sphere.set_dimensionality(None)
         sio.emit("new_dist_ctrls", {"new_dist_ctrls": ""})
     else:
         try:
             dims = [int(d.strip()) for d in data["dims"].split(",")]
             if np.prod(np.array(dims)) == sphere.n() and dims.count(1) == 0:
-                sphere.dimensionality = dims
+                sphere.set_dimensionality(dims)
                 ctrls = "<div id='dist_ctrls_form'>"
                 i = 0
                 ctrls += "<input type='radio' name='dist_selected' value='-1'>sphere<br>"

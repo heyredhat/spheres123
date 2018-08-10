@@ -10,6 +10,9 @@ import itertools
 import functools
 import qutip as qt
 import numpy as np
+import ephem
+import ephem.stars
+import datetime
 
 ##################################################################################################################
 
@@ -301,6 +304,68 @@ def mink_rotate_qubits(qubits, axis, dt=0.01, inverse=False):
     qubits2 = [mink_qubit(mink) for mink in minks]
     return qubits_q(qubits2)
 
+def oneParameter_mobius(kind, parameter, acts_on):
+    if kind == "parabolic_a":
+        a = parameter
+        if acts_on == "hermitian":
+            return np.array([[1, a],\
+                             [0, 1]])
+        elif acts_on == "txyz":
+            return np.array([[1 + (a**2)/2., a, 0, -1*(a**2)/2.],\
+                             [a, 1, 0, -1*a],\
+                             [0, 0, 1, 0],\
+                             [(a**2)/2., a, 0, 1-(a**2)/2.]])
+    elif kind == "parabolic_b":
+        a = parameter
+        if acts_on == "hermitian":
+            return np.array([[1, I()*a],\
+                             [0, 1]])
+        elif acts_on == "txyz":
+            return np.array([[1 + (a**2)/2., 0, a, -1*(a**2)/2.],\
+                             [0, 1, 0, 0],\
+                             [a, 0, 1, -1*a],\
+                             [(a**2)/2., 0, a, 1-(a**2)/2.]])
+    elif kind == "hyperbolic_z":
+        b = parameter
+        if acts_on == "hermitian":
+            return np.array([[np.exp(b/2.), 0],\
+                             [0, np.exp(-1*b/2.)]])
+        elif acts_on == "txyz":
+            return np.array([[np.cosh(b), 0, 0, np.sinh(b)],\
+                             [0, 1, 0, 0],\
+                             [0, 0, 1, 0],\
+                             [np.sinh(b), 0, a, np.cosh(b)]])
+    elif kind == "elliptic_x":
+        theta = parameter
+        if acts_on == "hermitian":
+            return np.array([[np.exp(I()*theta/2.), 0],\
+                             [0, np.exp(-1*I()*theta/2.)]])
+        elif acts_on == "txyz":
+            return np.array([[1, 0, 0, 0],\
+                             [0, np.cos(theta), -1*np.sin(theta), 0],\
+                             [0, np.sin(theta), np.cos(theta), 0],\
+                             [0, 0, 0, 1]])
+    elif kind == "elliptic_y":
+        theta = parameter
+        if acts_on == "hermitian":
+            return np.array([[np.cos(theta/2.), -1*np.sin(theta/2.)],\
+                             [np.sin(theta/2.), np.cos(theta/2)]])
+        elif acts_on == "txyz":
+            return np.array([[1, 0, 0, 0],\
+                             [0, np.cos(theta), 0, np.sin(theta)],\
+                             [0, 0, 1, 0],\
+                             [0, -1*np.sin(theta), 0, np.cos(theta)]])
+    elif kind == "elliptic_z":
+        theta = parameter
+        if acts_on == "hermitian":
+            return np.array([[np.cos(theta/2.), I()*np.sin(theta/2.)],\
+                             [I()*np.sin(theta/2.), np.cos(theta/2)]])
+        elif acts_on == "txyz":
+            return np.array([[1, 0, 0, 0],\
+                             [0, 1, 0, 0],\
+                             [0, 0, np.cos(theta), -1*np.sin(theta)],\
+                             [0, 0, np.sin(theta), np.cos(theta)]])
+
 ##################################################################################################################
 
 def separable(whole, dims, piece_index):
@@ -429,6 +494,61 @@ def fock_spin(fock_state):
     return sum(bases)
 
 ##################################################################################################################
+
+STAR_NAMES = [star.split(",")[0] for star in ephem.stars.db.split("\n")][:-1]
+
+def c_altitudeAzimuth(c):
+    r, th = cmath.polar(c)
+    if r == 0:
+        return [(math.pi/2.) - math.pi, th]
+    return [(math.pi/2.) - 2*math.atan2(1,r), th]
+
+def altitudeAzimuth_c(altitude, azimuth):
+    zenith = (math.pi/2.) - altitude
+    if zenith == 0:
+        return float('inf')
+    return cmath.rect(math.sin(zenith)/(1-math.cos(zenith)), azimuth)
+
+def v_ALTITUDEaZIMUTH(v):
+    return [c_altitudeAzimuth(c) for c in v_C(v)]
+
+def ALTITUDEaZIMUTH_v(ALTITUDEaZIMUTH):
+    return C_v([altitudeAzimuth_c(*altitudeAzimuth) for altitudeAzimuth in ALTITUDEaZIMUTH])
+
+def latitudeLongitude_xyz(latitude, longitude):
+    latitude = math.radians(latitude)
+    longitude = math.radians(longitude)
+    x = math.cos(latitude)*math.cos(longitude)
+    y = math.cos(latitude)*math.sin(longitude)
+    z = math.sin(latitude)
+    return [x, y, z]
+
+def xyz_latitudeLongitude(xyz):
+    x, y, z = xyz[0], xyz[1], xyz[2]
+    r = 1
+    latitude = math.asin(z/r)*(180/math.pi)
+    longitude = None
+    if x > 0:
+        longitude = math.atan(y/x)*(180/math.pi)
+    elif y > 0:
+        longitude = math.atan(y/x)*(180/math.pi) + 180
+    else:
+        longitude = math.atan(y/x)*(180/math.pi) - 180
+    return (latitude, longitude)
+
+def star_state(time, latitude, longitude):
+    global STAR_NAMES
+    observer = ephem.Observer()
+    observer.date = time
+    observer.lat = latitude
+    observer.lon = longitude
+    ephem_planets = [ephem.Sun(observer), ephem.Moon(observer), ephem.Mercury(observer),\
+                     ephem.Venus(observer), ephem.Mars(observer), ephem.Jupiter(observer), ephem.Saturn(observer)]
+    ephem_stars = [ephem.star(star_name, observer) for star_name in STAR_NAMES]
+    return qt.Qobj(ALTITUDEaZIMUTH_v([(planet.alt, planet.az) for planet in ephem_planets])).unit()
+
+##################################################################################################################
+
 
 def coupling_(a, b):
     particle_types = []
