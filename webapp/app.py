@@ -28,6 +28,7 @@ def reset_options():
     options["now"] = datetime.datetime.now()
     options["latitude"] = 40.708457
     options["longitude"] = -73.921884
+    options["iterated_majorana"] = False
 
 reset_options()
 
@@ -146,7 +147,9 @@ def animate():
                             "2d_harmonic_oscillator" : harmonic_osc_2d,\
                             "sym_arrows" : sym_arrows,\
                             "others" : the_spheres.pretty_children(sphere) if options["show_others"] else "",\
-                            "pure" : True if sphere.pure_sphere != None else False  });
+                            "pure" : True if sphere.pure_sphere != None else False,
+                            "iterated_majorana_available" : True if sphere.pure_sphere != None and sphere.pure_sphere.state.shape[0] == 3 else False,\
+                            "iterated_majorana" : sphere.pure_sphere.iterated_majorana()[1:] if sphere.pure_sphere != None and sphere.pure_sphere.state.shape[0] == 3 and options["iterated_majorana"] else []});
         sio.emit("animate", data)
         sio.sleep(0.001)
         #except Exception as e:
@@ -499,6 +502,11 @@ def penrose(sid, data):
     global the_spheres
     global sphere
     sio.emit("angles", {"angles": the_spheres.pretty_penrose()})
+
+@sio.on("iterated_majorana")
+def iterated_majorana(sid, data):
+    global options
+    options["iterated_majorana"] = True if options["iterated_majorana"] == False else False
 
 ##################################################################################################################
 

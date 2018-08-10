@@ -21,7 +21,6 @@ var sphere_geometry = new THREE.SphereGeometry(1, 32, 32);
 var sphere_material = new THREE.MeshPhongMaterial({color: 0x0000ff,  transparent: true});
 var sphere = new THREE.Mesh(sphere_geometry, sphere_material);
 sphere_material.opacity = 0.5;
-//sphere_material.side = THREE.DoubleSide;
 scene.add(sphere);
 
 var up_arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 1, 0xffff00, 0.1);
@@ -53,6 +52,9 @@ var skies = {};
 var harmonic_osc1D = {};
 var harmonic_osc2D = {};
 var sym_arrows = [];
+var iterated_majorana_spheres = [];
+var iterated_majorana_stars = [];
+
 
 /************************************************************************************************************/
 
@@ -141,6 +143,31 @@ function do_angles() {
 	spheresSocket.emit("penrose", {"": ""});
 }
 
+var show_spin_cam = false;
+var cam_touched = false;
+function spin_cam() {
+	if (show_spin_cam == false) {
+		show_spin_cam = true;
+		sphere.material.side = THREE.BackSide;
+	} else {
+		show_spin_cam = false;
+		sphere.material.side = THREE.FrontSide;
+		cam_touched = true;
+	}
+}
+
+function tunes() {
+	if (document.getElementById("sphurs_audio").paused) { 
+		document.getElementById("sphurs_audio").play(); 
+	} else { 
+		document.getElementById("sphurs_audio").pause();
+	}
+}
+
+function iterated_majorana() {
+	spheresSocket.emit("iterated_majorana", {"": ""});
+}
+
 /************************************************************************************************************/
 
 document.addEventListener("keypress", function (event) {
@@ -184,6 +211,62 @@ function render (response) {
 	var new_sym_arrows = response["sym_arrows"];
 	var new_others = response["others"];
 	var new_purity = response["pure"];
+	var new_iterated_majorana_available = response["iterated_majorana_available"];
+	var new_iterated_majorana = response["iterated_majorana"];
+
+	// Update iterated majorana available button
+	if (new_iterated_majorana_available == true) {
+		maj_button = document.getElementById("maj");
+    	maj_button.style.display = "block";
+	} else {
+		maj_button = document.getElementById("maj");
+    	maj_button.style.display = "none";
+	}
+
+	// Updated iterated majorana
+	if (new_iterated_majorana.length != 0) {
+		if (iterated_majorana_stars.length == 0) {
+			for (i = 0; i < new_iterated_majorana.length; ++i) {
+				var sgeo = new THREE.SphereGeometry(i+2, 32, 32);
+				var ccc = Math.random() * 0xffffff
+				var smat = new THREE.MeshPhongMaterial({color: ccc,  transparent: true}); 
+				var sph = new THREE.Mesh(sgeo, smat); 
+				smat.opacity = 0.5;
+				smat.side = THREE.BackSide;
+				sph.position.set(0,0,0);
+				scene.add(sph);
+				iterated_majorana_spheres.push(sph);
+
+				var some_new_stars = [];
+				for (j = 0; j < new_iterated_majorana[i].length; ++j) {
+					var star_geometry = new THREE.SphereGeometry(0.075*(i+2), 32, 32);
+					var star_material = new THREE.MeshPhongMaterial({color: ccc});
+					var star = new THREE.Mesh(star_geometry, star_material);
+					star.position.set((i+2)*new_iterated_majorana[i][j][0], (i+2)*new_iterated_majorana[i][j][1], (i+2)*new_iterated_majorana[i][j][2]);
+					some_new_stars.push(star);
+					scene.add(star);
+				}
+				iterated_majorana_stars.push(some_new_stars);
+			}
+		} else {
+ 			for (i = 0; i < new_iterated_majorana.length; ++i) {
+ 				for (j = 0; j < new_iterated_majorana[i].length; ++j) {
+ 					iterated_majorana_stars[i][j].position.set((i+2)*new_iterated_majorana[i][j][0], (i+2)*new_iterated_majorana[i][j][1], (i+2)*new_iterated_majorana[i][j][2]);
+ 				}
+ 			}
+		}
+	} else {
+		for (i = 0; i < iterated_majorana_stars.length; ++i) {
+			for (j = 0; j < iterated_majorana_stars[i].length; ++j) {
+				scene.remove(iterated_majorana_stars[i][j]);
+			}
+		}
+		for (i = 0; i < iterated_majorana_spheres.length; ++i) {
+			scene.remove(iterated_majorana_spheres[i]);
+		}
+		iterated_majorana_stars = [];
+		iterated_majorana_spheres = [];
+	}
 
 	// Update mixed/pure
 	if (new_purity == true) {
@@ -449,12 +532,41 @@ function render (response) {
 													new_spin_axis[0][2]));
 	spin_axis_arrow.setLength(new_spin_axis[1]);
 
+	// Update spin cam
+	if (show_spin_cam == true) {
+		camera.position.set(new_spin_axis[1]*new_spin_axis[0][0], new_spin_axis[1]*new_spin_axis[0][1], new_spin_axis[1]*new_spin_axis[0][2]);
+		//camera.position.set(3*new_spin_axis[0][0], 3*new_spin_axis[0][1], 3*new_spin_axis[0][2]);
+
+		//camera.up = new THREE.Vector3();
+		camera.lookAt(new THREE.Vector3(0,0,0));
+
+		up_arrow.visible = false;
+	} else {
+		if (cam_touched == true) {
+			camera.position.set(0, 0, 2);
+			camera.lookAt(new THREE.Vector3(0,0,0));
+			cam_touched = false;
+			up_arrow.visible = true;
+		}
+	}
+
 	// Update phase arrow
 	if (new_phase.length == 0) {
 		phase_arrow.visible = false;
 	} else {
 		phase_arrow.visible = true;
-		phase_arrow.setDirection(new THREE.Vector3(new_phase[0], new_phase[1], 0));
+		if (show_spin_cam == true) {
+			original_up = new THREE.Vector3(0,0,1);
+			new_up = new THREE.Vector3(new_spin_axis[0][0], new_spin_axis[0][1], new_spin_axis[0][2]);
+			var quaternion = new THREE.Quaternion(); 
+			quaternion.setFromUnitVectors(original_up, new_up);
+
+			phase_dir = new THREE.Vector3(new_phase[0], new_phase[1], 0);
+			phase_dir.applyQuaternion(quaternion);
+			phase_arrow.setDirection(phase_dir);
+		} else {
+			phase_arrow.setDirection(new THREE.Vector3(new_phase[0], new_phase[1], 0));
+		}
 	}
 
 	// Update stars

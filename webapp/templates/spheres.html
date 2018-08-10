@@ -65,6 +65,11 @@
     <button onclick="set_dims()" type="button">set dims</button>  
     <div style="margin-left:2em;" id="density_selector"></div>
     <button onclick="set_density_selected()" type="button">select</button>
+   -------------------------------
+    <button id="spin_cam" onclick="spin_cam()" type="button">spin cam</button>
+    <button id="tunes" onclick="tunes()" type="button">tunes</button>
+    <audio id="sphurs_audio" style="display:none;" loop src="{{ url_for('static', filename='sphurs.mp3') }}"></audio>
+    <button id="maj" style="margin-left:2.8em;" onclick="iterated_majorana()" type="button">iterated majorana</button>
    -------------------------------</pre></div>
    <div id="others"><pre>
    ------------------------------- 

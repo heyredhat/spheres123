@@ -190,6 +190,18 @@ class PureSphere:
         self.precalc_symmetrical = None       
         return stuff
 
+    def iterated_majorana(self, levels=3):
+        heavens = []
+        if levels == 1:
+            heavens = [self.stars()]
+        elif levels == 2:
+            heavens = [self.stars(), q_SurfaceXYZ(self.symmetrical())]
+        elif levels > 2:
+            heavens = [self.stars(), q_SurfaceXYZ(self.symmetrical())]
+            for i in range(levels-2):
+                heavens.append(q_SurfaceXYZ(symmeterize([SurfaceXYZ_q([star]) for star in heavens[-1]])))
+        return heavens
+
     def sym_arrows(self):
         symmeterized = self.symmetrical().copy()
         symmeterized.dims = [[2]*(self.n()-1),[1]*(self.n()-1)]
