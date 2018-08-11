@@ -61,7 +61,7 @@ def animate():
     global new_sphere
     global did_split
     while True:
-      #  try:
+        #try:
         #if len(the_spheres.children) > 2:
         #    print(the_spheres.penrose_angle(the_spheres.children[0], the_spheres.children[1]))
 

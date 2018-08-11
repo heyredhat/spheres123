@@ -114,6 +114,10 @@ class Spheres:
         if len(self.children) == 1:
             return self.state.ptrace(0)
         else:
+            #print(child_sphere)
+            #print(self.children)
+            #print(self.state)
+            #sys.stdout.flush()
             if child_sphere in self.children:
                 i = self.children.index(child_sphere)
                 return self.state.ptrace(i)

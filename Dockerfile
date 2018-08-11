@@ -1,4 +1,4 @@
-FROM heroku/miniconda
+FROM heroku/miniconda:3
 
 # Grab requirements.txt.
 ADD ./webapp/requirements.txt /tmp/requirements.txt
@@ -11,6 +11,7 @@ ADD ./webapp /opt/webapp/
 WORKDIR /opt/webapp
 
 RUN conda install sympy
-RUN conda install -c conda-forge qutip=4.2 
+RUN conda install ephem
+RUN conda install -c conda-forge qutip=4.2
 
 CMD gunicorn -k eventlet -w 1 --bind 0.0.0.0:$PORT wsgi
